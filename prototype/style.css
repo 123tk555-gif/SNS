@@ -541,6 +541,16 @@ textarea:focus, input:focus { border-color: var(--accent); }
 .empty { padding: 48px 24px; text-align: center; color: var(--muted); }
 .empty .btn { margin-top: 16px; }
 .list-end { padding: 20px; text-align: center; color: var(--muted); font-size: 15px; }
+.list-more { display: flex; flex-direction: column; align-items: center; padding-bottom: 24px; }
+.list-more .list-end { padding-bottom: 8px; }
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px;
+}
 
 .newbar {
   position: sticky;

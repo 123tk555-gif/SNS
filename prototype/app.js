@@ -61,6 +61,9 @@ const state = {
   menuFor: null,
   drafts: { home: emptyDraft(), reply: emptyDraft(), dialog: emptyDraft() },
   bookmarksShown: [],
+  listLimit: 20,
+  loadingMore: false,
+  adminPage: 0,
   signupSent: false,
   pendingRender: false,
 };
@@ -73,6 +76,37 @@ const INCOMING = [
   { author: 'ken_eng', text: 'EC2 の t4g.micro でも Spring Boot が動きました #AWS #Docker' },
 ];
 const LIKERS = ['yuto', 'mika', 'ken_eng'];
+
+// 無限スクロールを確かめるためのテスト投稿(1000件)。最初の投稿より古い時刻にして、後ろに並べる。
+// 本文の「テスト投稿 ○件目」は、上から順に 1, 2, 3… と増えるので、抜けや重なりがないかを確かめられる
+const TEST_POST_COUNT = 1000;
+const TEST_TEXTS = [
+  'おはようございます。今日もがんばります',
+  '#SpringBoot の Controller のテストを書きました',
+  'お昼ごはんはカレーでした',
+  '#写真 散歩の途中で撮りました',
+  'React の useEffect の使い方を復習中',
+  '#カフェ巡り 駅前の新しいお店に行ってきました',
+  'Docker のイメージを小さくする方法を調べています #Docker',
+  '雨が降ってきました。傘を忘れた…',
+  'ポートフォリオの README を書き直しました',
+  '週末は図書館で勉強する予定です',
+];
+const TEST_AUTHORS = ['hanako', 'ken_eng', 'mika', 'yuto', 'taro_dev'];
+const TEST_TONES = ['#e9dccb', '#cfe3d4', '#d5e4ea', '#f2c29b', '#e3d5ef'];
+
+for (let i = 0; i < TEST_POST_COUNT; i += 1) {
+  const number = i + 1;
+  state.posts.push({
+    id: 100 + i,
+    author: TEST_AUTHORS[i % TEST_AUTHORS.length],
+    text: `${TEST_TEXTS[i % TEST_TEXTS.length]}(テスト投稿 ${number}件目)`,
+    at: ago(4500 + i * 45),
+    likes: (i * 7) % 40,
+    images: number % 9 === 0 ? [{ alt: `テスト投稿 ${number}件目の画像`, tone: TEST_TONES[i % TEST_TONES.length] }] : [],
+  });
+}
+state.nextPostId = 2000;
 
 // ---- 小さな道具 ----
 const $ = (selector) => document.querySelector(selector);
@@ -301,9 +335,48 @@ function postCard(p, { big = false, showComposer = false } = {}) {
   ${showComposer ? composer('reply', { replyTo: p }) : ''}`;
 }
 
+// 一覧は 20 件ずつ表示する(F-TL-03)。下端が見えたら自動で続きを読み込み、
+// キーボードの利用者のために「さらに読み込む」ボタンも置く(画面仕様定義書 3.4)
+const PAGE_SIZE = 20;
+
 function postList(posts, emptyHtml) {
   if (!posts.length) return `<div class="empty">${emptyHtml}</div>`;
-  return posts.map((p) => postCard(p)).join('') + '<p class="list-end">これ以上はありません</p>';
+  const shown = posts.slice(0, state.listLimit);
+  const rest = posts.length - shown.length;
+  const footer = rest > 0
+    ? `<div class="list-more" id="list-sentinel">
+         <p class="list-end" role="status">${state.loadingMore ? '読み込み中…' : `${shown.length}件を表示中(全${posts.length}件)`}</p>
+         <button class="btn btn-outline" type="button" data-action="load-more" data-key="load-more" ${state.loadingMore ? 'disabled' : ''}>さらに読み込む</button>
+       </div>`
+    : '<p class="list-end">これ以上はありません</p>';
+  return shown.map((p) => postCard(p)).join('') + footer;
+}
+
+// 本番ではサーバーから続きを取るので、少し待たせて「読み込み中…」を見せる
+const LOAD_DELAY = 500;
+function loadMore() {
+  if (state.loadingMore || !document.getElementById('list-sentinel')) return;
+  state.loadingMore = true;
+  renderSoon();
+  setTimeout(() => {
+    state.loadingMore = false;
+    state.listLimit += PAGE_SIZE;
+    renderSoon();
+  }, LOAD_DELAY);
+}
+
+// 一覧の下端(list-sentinel)が画面に入ったら、続きを読み込む
+const sentinelObserver = new IntersectionObserver(
+  (entries) => {
+    if (entries.some((entry) => entry.isIntersecting)) loadMore();
+  },
+  { rootMargin: '300px 0px' },
+);
+
+function observeSentinel() {
+  sentinelObserver.disconnect();
+  const sentinel = document.getElementById('list-sentinel');
+  if (sentinel) sentinelObserver.observe(sentinel);
 }
 
 function followButton(key) {
@@ -749,6 +822,7 @@ function viewAdmin() {
   </form>`;
 
   let rows;
+  let pager = '';
   if (tab === 'users') {
     const keys = Object.keys(state.users).filter((k) => {
       const u = state.users[k];
@@ -768,7 +842,18 @@ function viewAdmin() {
         </div>`;
       }).join('');
   } else {
-    const posts = state.posts.filter((p) => !p.deleted && (!q || matchesAll(p.text, q)));
+    // 50 件ずつのページ送り(画面仕様定義書 S-15)
+    const all = state.posts.filter((p) => !p.deleted && (!q || matchesAll(p.text, q)));
+    const lastPage = Math.max(0, Math.ceil(all.length / ADMIN_PAGE_SIZE) - 1);
+    const page = Math.min(state.adminPage, lastPage);
+    const from = page * ADMIN_PAGE_SIZE;
+    const posts = all.slice(from, from + ADMIN_PAGE_SIZE);
+    pager = `
+    <div class="pager">
+      <button class="btn btn-outline" type="button" data-action="admin-page" data-page="${page - 1}" data-key="admin-prev" ${page === 0 ? 'disabled' : ''}>前の50件</button>
+      <span>${all.length ? `${from + 1}〜${from + posts.length}件目(全${all.length}件)` : '0件'}</span>
+      <button class="btn btn-outline" type="button" data-action="admin-page" data-page="${page + 1}" data-key="admin-next" ${page >= lastPage ? 'disabled' : ''}>次の50件</button>
+    </div>`;
     rows = `<div class="admin-row head" aria-hidden="true"><span>ID</span><span>投稿者</span><span>本文</span><span>状態</span><span>操作</span></div>` +
       posts.map((p) => {
         const author = state.users[p.author];
@@ -782,9 +867,11 @@ function viewAdmin() {
         </div>`;
       }).join('');
   }
-  const body = `<nav class="tabs" aria-label="管理する対象">${tabLink('posts', '投稿')}${tabLink('users', 'ユーザー')}</nav>${form}<div class="admin-table">${rows}</div>`;
+  const body = `<nav class="tabs" aria-label="管理する対象">${tabLink('posts', '投稿')}${tabLink('users', 'ユーザー')}</nav>${form}<div class="admin-table">${rows}</div>${pager}`;
   return layout('管理者画面', body, { sub: 'プロトタイプでは、たろうが管理者です' });
 }
+
+const ADMIN_PAGE_SIZE = 50;
 
 function viewNotFound() {
   return layout('ページが見つかりません', `
@@ -947,6 +1034,9 @@ function onRouteChange() {
   state.route = next;
   state.menuFor = null;
   state.newCount = 0;
+  state.listLimit = PAGE_SIZE;
+  state.loadingMore = false;
+  if (prev.name !== 'admin' || next.name !== 'admin' || prev.tab !== next.tab || prev.q !== next.q) state.adminPage = 0;
   render();
   window.scrollTo(0, 0);
 
@@ -967,6 +1057,7 @@ function render() {
   app.innerHTML = (VIEWS[state.route.name] ?? viewNotFound)();
   for (const kind of Object.keys(state.drafts)) updateComposer(kind);
   if (key) app.querySelector(key)?.focus({ preventScroll: true });
+  observeSentinel();
 }
 
 // 入力中に画面を書き直すと入力の邪魔になるので、入力欄から離れるまで待つ
@@ -1122,6 +1213,8 @@ function receive() {
   const showsOnHome = r.name === 'home' && visible(post) && (r.tab === 'all' || state.following.includes(post.author));
   const scrolled = window.scrollY > 200;
   if (showsOnHome && scrolled) state.newCount += 1;
+  // 先頭に 1 件増えた分、表示する件数も 1 件増やす(読んでいた一覧の最後の投稿が消えないように)
+  if (showsOnHome) state.listLimit += 1;
 
   // 下を読んでいる間に先頭へ足したときは、その分だけスクロールして、見ている投稿が動かないようにする
   const before = document.documentElement.scrollHeight;
@@ -1144,6 +1237,7 @@ function submitPost(form) {
   const replyTo = form.dataset.replyTo ? Number(form.dataset.replyTo) : undefined;
   const post = { id: state.nextPostId++, author: ME, text: draft.text.trim(), at: Date.now(), likes: 0, images: draft.images, replyTo };
   state.posts.unshift(post);
+  state.listLimit += 1;
   state.drafts[kind] = emptyDraft();
   if (kind === 'dialog') closeDialog();
   render();
@@ -1316,6 +1410,12 @@ const ACTIONS = {
   'confirm-dialog': () => dialogConfirm?.(),
   'close-toast': () => { $('#toast').hidden = true; },
   receive: () => receive(),
+  'load-more': () => loadMore(),
+  'admin-page': ({ page }) => {
+    state.adminPage = Math.max(0, Number(page));
+    render();
+    window.scrollTo(0, 0);
+  },
   refresh: () => { render(); toast('トレンドを更新しました'); },
   suspend: ({ user }) => {
     const u = state.users[user];
