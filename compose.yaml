@@ -1,0 +1,35 @@
+# 開発用。データベース(PostgreSQL)と、メールの確認用サーバー(Mailpit)を動かす。
+# 使い方: このフォルダで `docker compose up -d`
+# どちらも、この PC からだけ接続できる(127.0.0.1)。
+services:
+  db:
+    image: postgres:18
+    container_name: sns-db
+    environment:
+      POSTGRES_DB: sns
+      POSTGRES_USER: sns
+      POSTGRES_PASSWORD: sns
+      TZ: Asia/Tokyo
+    # 5432番は taskboard のデータベースが使っているので、この PC 側は 5433番にする
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - sns-db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sns -d sns"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # アプリが送ったメールを外に出さずに受け取る。http://localhost:8025 で中身を見られる
+  mail:
+    image: axllent/mailpit:v1
+    container_name: sns-mail
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+    restart: unless-stopped
+
+volumes:
+  sns-db-data:
