@@ -17,6 +17,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     /** handleLower は小文字にしたユーザーID(User.normalizeHandle) */
     boolean existsByHandleLower(String handleLower);
 
+    Optional<User> findByHandleLower(String handleLower);
+
     /** 管理者画面のユーザー一覧: ユーザーID・表示名・メールアドレスの部分一致。登録の新しい順 */
     @Query("""
             select u from User u

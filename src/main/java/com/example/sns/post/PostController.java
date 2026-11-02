@@ -73,15 +73,15 @@ class PostController {
         return ResponseEntity.noContent().build();
     }
 
-    /** タイムライン。tab は今は all(すべて)だけ。following(フォロー中)は M5 で作る */
+    /** タイムライン。tab は all(すべて)か following(フォロー中) */
     @GetMapping("/api/timeline")
     PostService.Page timeline(@AuthenticationPrincipal LoginUser me,
             @RequestParam(defaultValue = "all") String tab,
             @RequestParam(required = false) Long before,
             @RequestParam(required = false) Integer limit) {
-        if (!tab.equals("all")) {
+        if (!tab.equals("all") && !tab.equals("following")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "tab の値が正しくありません");
         }
-        return service.timeline(me.id(), before, limit);
+        return service.timeline(me.id(), tab.equals("following"), before, limit);
     }
 }

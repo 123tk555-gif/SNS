@@ -131,12 +131,42 @@ public class PostService {
 
     // ---- タイムライン(F-TL-01, 03) ----
 
+    /** following: true なら「フォロー中」(自分とフォローしている人の投稿)、false なら「すべて」 */
     @Transactional(readOnly = true)
-    public Page timeline(long viewerId, Long before, Integer limit) {
+    public Page timeline(long viewerId, boolean following, Long before, Integer limit) {
         int size = pageSize(limit);
+        long cursor = before == null ? Long.MAX_VALUE : before;
         // 1 件多く取り、続きがあるかを確かめる
-        List<Post> found = posts.findTimeline(before == null ? Long.MAX_VALUE : before, PageRequest.of(0, size + 1));
+        PageRequest request = PageRequest.of(0, size + 1);
+        List<Post> found = following
+                ? posts.findFollowingTimeline(viewerId, cursor, request)
+                : posts.findTimeline(cursor, request);
         return page(found, size, viewerId);
+    }
+
+    // ---- ある人の投稿の一覧(プロフィール。F-PROF-03, 04) ----
+
+    public enum AuthorTab {
+        /** 返信以外 */
+        POSTS,
+        /** 返信を含むすべて */
+        REPLIES,
+        /** 画像付き(返信を含む) */
+        MEDIA
+    }
+
+    /** 本人が見るときは、管理者に非表示にされた投稿も(印を付けて)出す(機能定義書 1.6 の例外) */
+    @Transactional(readOnly = true)
+    public Page byAuthor(long authorId, long viewerId, AuthorTab tab, Long before, Integer limit) {
+        int size = pageSize(limit);
+        List<Post> found = posts.findByAuthor(authorId, tab != AuthorTab.POSTS, tab == AuthorTab.MEDIA,
+                authorId == viewerId, before == null ? Long.MAX_VALUE : before, PageRequest.of(0, size + 1));
+        return page(found, size, viewerId);
+    }
+
+    @Transactional(readOnly = true)
+    public long countByAuthor(long authorId) {
+        return posts.countByAuthor(authorId);
     }
 
     // ---- 返信の一覧(F-POST-08) ----

@@ -9,16 +9,16 @@ import javax.imageio.ImageIO;
 import org.springframework.mock.web.MockMultipartFile;
 
 /** テスト用の小さな画像ファイル */
-final class TestImages {
+public final class TestImages {
 
     private TestImages() {
     }
 
-    static MockMultipartFile image(String format, int width, int height) {
+    public static MockMultipartFile image(String format, int width, int height) {
         return new MockMultipartFile("images", "photo." + format, "image/" + format, bytes(format, width, height));
     }
 
-    static byte[] bytes(String format, int width, int height) {
+    public static byte[] bytes(String format, int width, int height) {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             ImageIO.write(new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), format, out);
             return out.toByteArray();
@@ -28,7 +28,7 @@ final class TestImages {
     }
 
     /** WebP(拡張形式 VP8X)の先頭部分だけを作る。サーバーは中身を表示用に作り直さないので、大きさが読めればよい */
-    static MockMultipartFile webp(int width, int height) {
+    public static MockMultipartFile webp(int width, int height) {
         byte[] b = new byte[40];
         put(b, 0, "RIFF");
         put(b, 8, "WEBP");
@@ -46,7 +46,7 @@ final class TestImages {
     }
 
     /** 拡張子は .png だが、中身は画像ではないファイル */
-    static MockMultipartFile fake() {
+    public static MockMultipartFile fake() {
         return new MockMultipartFile("images", "evil.png", "image/png",
                 "<script>alert(1)</script>".getBytes(StandardCharsets.UTF_8));
     }

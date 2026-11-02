@@ -65,6 +65,7 @@ class SeedData implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        jdbc.update("delete from follows");
         jdbc.update("delete from likes");
         jdbc.update("delete from bookmarks");
         jdbc.update("delete from post_images");
@@ -116,7 +117,15 @@ class SeedData implements ApplicationRunner {
                 cross join (select id from posts where reply_to_id is null order by id desc limit 3) p
                 where u.handle = 'taro_dev'
                 """);
-        log.info("テストデータを入れました(ユーザー {} 人・投稿 {} 件・返信・いいね・ブックマーク。パスワードはすべて {})",
+        // フォロー: たろうははなこ・けんを、はなこ・ゆうと・みかはたろうをフォローしている
+        jdbc.update("""
+                insert into follows (from_user_id, to_user_id, created_at)
+                select a.id, b.id, now() from (values
+                    ('taro_dev', 'hanako'), ('taro_dev', 'ken_eng'), ('hanako', 'taro_dev'),
+                    ('yuto', 'taro_dev'), ('mika', 'taro_dev'), ('hanako', 'mika')) as f(follower, followee)
+                join users a on a.handle = f.follower join users b on b.handle = f.followee
+                """);
+        log.info("テストデータを入れました(ユーザー {} 人・投稿 {} 件・返信・いいね・ブックマーク・フォロー。パスワードはすべて {})",
                 USERS.length, total, PASSWORD);
     }
 }

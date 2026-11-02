@@ -198,7 +198,7 @@ class PostApiTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.nextCursor").isEmpty());
 
         taro.get("/api/timeline?limit=51").andExpect(status().isBadRequest());
-        taro.get("/api/timeline?tab=following").andExpect(status().isBadRequest());
+        taro.get("/api/timeline?tab=unknown").andExpect(status().isBadRequest());
     }
 
     @Test

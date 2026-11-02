@@ -3,11 +3,13 @@ import { useAuth } from './auth.jsx'
 import AuthLayout from './components/AuthLayout.jsx'
 import BookmarksPage from './pages/BookmarksPage.jsx'
 import ComingSoonPage from './pages/ComingSoonPage.jsx'
+import FollowListPage from './pages/FollowListPage.jsx'
 import HomePage from './pages/HomePage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import NotFoundPage from './pages/NotFoundPage.jsx'
 import OnboardingPage from './pages/OnboardingPage.jsx'
 import PostDetailPage from './pages/PostDetailPage.jsx'
+import ProfilePage from './pages/ProfilePage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 import SignupPage from './pages/SignupPage.jsx'
 import VerifyEmailPage from './pages/VerifyEmailPage.jsx'
@@ -67,7 +69,9 @@ export default function App() {
         {/* まだ作っていない画面(どのマイルストーンで作るかを表示する) */}
         <Route path="/posts/:id" element={<RequireAuth><PostDetailPage /></RequireAuth>} />
         <Route path="/bookmarks" element={<RequireAuth><BookmarksPage /></RequireAuth>} />
-        <Route path="/users/*" element={<RequireAuth><ComingSoonPage title="プロフィール" milestone="M5(フォロー)" showLogout /></RequireAuth>} />
+        <Route path="/users/:handle" element={<RequireAuth><ProfilePage /></RequireAuth>} />
+        <Route path="/users/:handle/following" element={<RequireAuth><FollowListPage kind="following" /></RequireAuth>} />
+        <Route path="/users/:handle/followers" element={<RequireAuth><FollowListPage kind="followers" /></RequireAuth>} />
         <Route path="/notifications" element={<RequireAuth><ComingSoonPage title="通知" milestone="M6" /></RequireAuth>} />
         <Route path="/search" element={<RequireAuth><ComingSoonPage title="検索" milestone="M7" /></RequireAuth>} />
         <Route path="/trends" element={<RequireAuth><ComingSoonPage title="トレンド" milestone="M7" /></RequireAuth>} />

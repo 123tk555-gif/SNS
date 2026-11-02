@@ -26,6 +26,40 @@ interface PostRepository extends JpaRepository<Post, Long> {
             """)
     List<Post> findTimeline(@Param("before") long before, Pageable pageable);
 
+    /**
+     * 「フォロー中」のタイムライン(F-TL-02): 「すべて」と同じ条件で、投稿者が自分か、自分がフォローしている人のもの
+     */
+    @Query("""
+            select p from Post p join fetch p.author a
+            where p.replyToId is null and p.deletedAt is null and p.hidden = false and a.suspended = false
+              and p.id < :before
+              and (a.id = :viewerId
+                   or a.id in (select f.followee.id from Follow f where f.follower.id = :viewerId))
+            order by p.id desc
+            """)
+    List<Post> findFollowingTimeline(@Param("viewerId") long viewerId, @Param("before") long before,
+            Pageable pageable);
+
+    /**
+     * ある人の投稿の一覧(プロフィール。F-PROF-03, 04)。新しい順。
+     * includeReplies: 返信も含めるか / mediaOnly: 画像付きだけか / includeHidden: 管理者に非表示にされた投稿も含めるか(本人のとき)
+     */
+    @Query("""
+            select p from Post p join fetch p.author a
+            where a.id = :authorId and p.deletedAt is null and p.id < :before
+              and (p.hidden = false or :includeHidden = true)
+              and (p.replyToId is null or :includeReplies = true)
+              and (:mediaOnly = false or exists (select 1 from PostImage i where i.post = p))
+            order by p.id desc
+            """)
+    List<Post> findByAuthor(@Param("authorId") long authorId, @Param("includeReplies") boolean includeReplies,
+            @Param("mediaOnly") boolean mediaOnly, @Param("includeHidden") boolean includeHidden,
+            @Param("before") long before, Pageable pageable);
+
+    /** プロフィールに出す投稿数(削除・非表示を除く) */
+    @Query("select count(p) from Post p where p.author.id = :authorId and p.deletedAt is null and p.hidden = false")
+    long countByAuthor(@Param("authorId") long authorId);
+
     /** 返信先の投稿を、投稿者と一緒にまとめて 1 回で取る(N+1 にしないため) */
     @Query("select p from Post p join fetch p.author where p.id in :ids")
     List<Post> findAllWithAuthor(@Param("ids") List<Long> ids);

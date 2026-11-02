@@ -603,6 +603,16 @@ h1[tabindex="-1"]:focus { outline: none; }
 .counts a:hover { text-decoration: underline; }
 .counts strong { margin-right: 4px; }
 .blocked-box { padding: 32px 16px; text-align: center; }
+/* フォロー中のボタン: マウスを乗せる・キーボードで選ぶと「フォローを解除」に変わる */
+.follow-on .label-active { display: none; }
+.follow-on:hover .label-idle, .follow-on:focus-visible .label-idle { display: none; }
+.follow-on:hover .label-active, .follow-on:focus-visible .label-active { display: inline; }
+.follow-on:hover, .follow-on:focus-visible { color: var(--danger); border-color: var(--danger); }
+/* スマートフォンだけ: 下のメニューに出ない画面(ブックマーク・設定)へのリンク */
+.mobile-links { display: none; gap: 20px; margin: 10px 0 0; }
+@media (max-width: 639px) {
+  .mobile-links { display: flex; }
+}
 
 /* ---- 通知 ---- */
 .notif {

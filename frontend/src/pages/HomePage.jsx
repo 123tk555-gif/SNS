@@ -6,7 +6,7 @@ import PostList from '../components/PostList.jsx'
 import { useNotice } from '../notice.jsx'
 import { useTimeline } from '../useTimeline.js'
 
-/** S-05 ホーム。「すべて」のタイムラインと投稿欄。「フォロー中」は M5、新着の自動反映は M6 で作る */
+/** S-05 ホーム。「すべて」「フォロー中」のタイムラインと投稿欄。新着の自動反映は M6 で作る */
 export default function HomePage() {
   const [searchParams] = useSearchParams()
   const tab = searchParams.get('tab') === 'following' ? 'following' : 'all'
@@ -29,17 +29,14 @@ export default function HomePage() {
         </Link>
       </nav>
       <Composer id="home" />
-      {tab === 'all' ? (
-        <AllTimeline />
-      ) : (
-        <div className="empty">「フォロー中」のタイムラインは、フォロー機能(M5)と一緒に作ります。</div>
-      )}
+      <Timeline key={tab} tab={tab} />
     </Layout>
   )
 }
 
-function AllTimeline() {
-  const timeline = useTimeline('/api/timeline?tab=all')
+/** tab: all(すべて。F-TL-01)/ following(自分とフォローしている人の投稿。F-TL-02) */
+function Timeline({ tab }) {
+  const timeline = useTimeline(`/api/timeline?tab=${tab}`)
   const { prepend } = timeline
 
   // 自分が投稿したら(ダイアログからの投稿も)、先頭に足す。返信はタイムラインに出さない(F-TL-06)
@@ -51,8 +48,19 @@ function AllTimeline() {
     return () => window.removeEventListener(POST_CREATED, onCreated)
   }, [prepend])
 
+  const empty = tab === 'all' ? (
+    'まだ投稿がありません。最初の投稿をしてみましょう'
+  ) : (
+    <>
+      <p>フォローしている人の投稿がここに表示されます</p>
+      <Link className="btn btn-primary" to="/search">
+        ユーザーを探す
+      </Link>
+    </>
+  )
+
   return (
-    <PostList {...timeline} emptyText="まだ投稿がありません。最初の投稿をしてみましょう"
-      onLoadMore={timeline.loadMore} onRetry={timeline.retry} onChange={timeline.replace} onDelete={timeline.remove} />
+    <PostList {...timeline} emptyText={empty} onLoadMore={timeline.loadMore} onRetry={timeline.retry}
+      onChange={timeline.replace} onDelete={timeline.remove} />
   )
 }
