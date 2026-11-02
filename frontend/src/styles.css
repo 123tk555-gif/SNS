@@ -5,14 +5,16 @@
   --bg: #ffffff;
   --surface: #f3f5f8;
   --text: #111827;
-  --muted: #4b5563;
+  --muted: #444c58;
   --border: #cbd2db;
-  --accent: #1d4ed8;
+  /* 入力欄・ボタンなど、操作する部品の枠線(背景との差 3 以上) */
+  --control-border: #6b7280;
+  --accent: #1a45c2;
   --accent-hover: #1e40af;
   --on-accent: #ffffff;
   --accent-soft: #e6edfd;
-  --like: #be123c;
-  --danger: #b91c1c;
+  --like: #a30f36;
+  --danger: #a81818;
   --on-danger: #ffffff;
   --shadow: 0 8px 24px rgba(17, 24, 39, 0.18);
   color-scheme: light;
@@ -25,6 +27,7 @@
     --text: #f1f3f6;
     --muted: #aeb7c2;
     --border: #3a4554;
+    --control-border: #7f8a9b;
     --accent: #8ab4ff;
     --accent-hover: #a9c7ff;
     --on-accent: #0e1217;
@@ -43,6 +46,7 @@
   --text: #f1f3f6;
   --muted: #aeb7c2;
   --border: #3a4554;
+  --control-border: #7f8a9b;
   --accent: #8ab4ff;
   --accent-hover: #a9c7ff;
   --on-accent: #0e1217;
@@ -214,6 +218,7 @@ h1, h2, h3 { line-height: 1.3; }
   padding: 14px 16px;
 }
 .panel h2 { font-size: 20px; margin: 0 0 8px; }
+.panel > a { display: inline-block; padding: 4px 0; }
 .panel p { margin: 0 0 10px; font-size: 15px; color: var(--muted); }
 
 /* ---- 画面の見出しのバー ---- */
@@ -279,7 +284,7 @@ h1, h2, h3 { line-height: 1.3; }
 }
 .btn-primary { background: var(--accent); color: var(--on-accent); }
 .btn-primary:hover { background: var(--accent-hover); color: var(--on-accent); }
-.btn-outline { background: var(--bg); color: var(--text); border-color: var(--border); }
+.btn-outline { background: var(--bg); color: var(--text); border-color: var(--control-border); }
 .btn-outline:hover { background: var(--surface); color: var(--text); }
 .btn-danger { background: var(--danger); color: var(--on-danger); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -477,7 +482,7 @@ input[type="email"],
 input[type="password"],
 input[type="search"] {
   width: 100%;
-  border: 2px solid var(--border);
+  border: 2px solid var(--control-border);
   border-radius: 12px;
   background: var(--bg);
   padding: 10px 12px;
@@ -677,7 +682,7 @@ h1[tabindex="-1"]:focus { outline: none; }
   gap: 8px;
   min-height: 44px;
   padding: 0 14px;
-  border: 2px solid var(--border);
+  border: 2px solid var(--control-border);
   border-radius: 999px;
   font-weight: 400;
   cursor: pointer;
@@ -718,6 +723,7 @@ h1[tabindex="-1"]:focus { outline: none; }
   padding: 0 8px;
 }
 .status.bad { color: var(--danger); }
+.admin-row a { display: inline-block; padding: 4px 0; }
 .admin-row .small { color: var(--muted); font-size: 14px; }
 .admin-row .btn { min-height: 40px; padding: 0 12px; font-size: 15px; }
 

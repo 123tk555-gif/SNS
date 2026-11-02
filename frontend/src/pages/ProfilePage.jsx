@@ -185,6 +185,7 @@ function UserMenu({ profile, onChange, onBlock }) {
   const notify = useNotice()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
+  const buttonRef = useRef(null)
 
   // メニューの外を押す・Esc キーで閉じる(投稿カードのメニューと同じ)
   useEffect(() => {
@@ -213,7 +214,7 @@ function UserMenu({ profile, onChange, onBlock }) {
 
   return (
     <div className="menu-wrap" ref={ref}>
-      <button className="icon-btn plain" type="button" aria-label="その他の操作" aria-expanded={open}
+      <button ref={buttonRef} className="icon-btn plain" type="button" aria-label="その他の操作" aria-expanded={open}
         onClick={() => setOpen((o) => !o)}>
         <Icon name="more" />
       </button>
@@ -227,7 +228,7 @@ function UserMenu({ profile, onChange, onBlock }) {
               ブロックを解除
             </button>
           ) : (
-            <button type="button" className="danger" onClick={() => { setOpen(false); onBlock() }}>
+            <button type="button" className="danger" onClick={() => { buttonRef.current?.focus(); setOpen(false); onBlock() }}>
               ブロックする
             </button>
           )}

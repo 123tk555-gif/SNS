@@ -1,0 +1,11 @@
+# 毎日 3 時 30 分(日本時間)に、アプリのログを S3 に写す
+[Unit]
+Description=SNS: 毎日のログの転送
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 Asia/Tokyo
+Persistent=true
+Unit=sns-s3-tasks@sync-logs.service
+
+[Install]
+WantedBy=timers.target

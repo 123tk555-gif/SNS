@@ -135,7 +135,7 @@ export default function Composer({ id, onPosted, replyTo }) {
           </p>
         )}
         <div className="composer-foot">
-          <input ref={fileInput} className="sr-only" type="file" tabIndex={-1} multiple
+          <input ref={fileInput} className="sr-only" type="file" tabIndex={-1} multiple aria-label="画像を選ぶ"
             accept="image/jpeg,image/png,image/webp,image/gif"
             onChange={(e) => {
               addFiles([...e.target.files])

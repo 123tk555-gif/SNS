@@ -1,0 +1,9 @@
+# deploy/aws/s3-tasks.sh を 1 回動かす(%i に backup か sync-logs が入る)。タイマー(sns-*.timer)から起動される
+[Unit]
+Description=SNS: S3 への %i
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/sns/deploy/aws/s3-tasks.sh %i

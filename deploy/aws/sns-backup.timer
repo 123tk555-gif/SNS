@@ -1,0 +1,12 @@
+# 毎日 3 時(日本時間)に、データベースのバックアップを S3 に送る
+[Unit]
+Description=SNS: 毎日のデータベースのバックアップ
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 Asia/Tokyo
+# サーバーを止めていて時刻を過ぎたら、次に起動したときに実行する
+Persistent=true
+Unit=sns-s3-tasks@backup.service
+
+[Install]
+WantedBy=timers.target

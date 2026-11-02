@@ -1,0 +1,9 @@
+# HTTPS の入り口(リバースプロキシ)。証明書は Caddy が自動で取得・更新する(Let's Encrypt)。
+# SITE_ADDRESS は .env に書く(例: 52-194-241-136.sslip.io)。localhost にすると、手元の確認用に自分で作った証明書になる。
+{$SITE_ADDRESS} {
+	encode zstd gzip
+	reverse_proxy app:8080 {
+		# 新着・通知(SSE)をためずにすぐ流す
+		flush_interval -1
+	}
+}

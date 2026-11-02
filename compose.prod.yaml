@@ -1,0 +1,75 @@
+# 公開用。データベース・アプリ・HTTPS の入り口(Caddy)を動かす。開発用の compose.yaml とは別。
+# 使い方: .env.example の「公開用」の部分を .env に書き、`docker compose -f compose.prod.yaml up -d --build`
+# 外に開くのは 80・443 番(Caddy)だけ。データベースとアプリには、外から直接つながらない(NF-SEC-10)。
+name: sns-prod
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: sns
+      POSTGRES_USER: sns
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD を .env に書いてください}
+      TZ: Asia/Tokyo
+    # 小さなサーバー(メモリ 1GB)向けに、使うメモリを抑える
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=20", "-c", "work_mem=2MB"]
+    volumes:
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sns -d sns"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build: .
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/sns
+      DB_USERNAME: sns
+      DB_PASSWORD: ${DB_PASSWORD}
+      # HTTPS のときだけ Cookie を送る。Caddy が付ける X-Forwarded-* を信じて、https の URL を組み立てる
+      COOKIE_SECURE: "true"
+      FORWARD_HEADERS_STRATEGY: framework
+      APP_BASE_URL: https://${SITE_ADDRESS:?SITE_ADDRESS を .env に書いてください}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # 画像の置き場所。AWS では s3(バケットは deploy/aws/setup-s3.ps1 で作る)。書かなければサーバーのボリューム uploads
+      STORAGE_TYPE: ${STORAGE_TYPE:-local}
+      S3_BUCKET: ${S3_BUCKET:-}
+      AWS_REGION: ${AWS_REGION:-ap-northeast-1}
+      MAIL_HOST: ${MAIL_HOST:?MAIL_HOST(メール送信サーバー)を .env に書いてください}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:?MAIL_FROM を .env に書いてください}
+    volumes:
+      - uploads:/data/uploads
+      - logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    # ports は書かない(Caddy からだけ、コンテナのネットワークの中でつながる)
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?SITE_ADDRESS を .env に書いてください}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  uploads:
+  logs:
+  caddy-data:
+  caddy-config:

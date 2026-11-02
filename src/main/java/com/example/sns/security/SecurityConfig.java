@@ -21,6 +21,7 @@ import org.springframework.security.web.authentication.AnonymousAuthenticationFi
 import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -34,6 +35,12 @@ public class SecurityConfig {
     static final String CSRF_FAILED = "画面を読み込み直してから、もう一度お試しください";
     static final String FORBIDDEN = "この操作の権限がありません";
 
+    /** 画面の部品の読み込み元の制限(Content-Security-Policy) */
+    static final String CONTENT_SECURITY_POLICY = "default-src 'self'; script-src 'self'; "
+            + "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; "
+            + "img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; "
+            + "form-action 'self'; frame-ancestors 'none'";
+
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -46,6 +53,11 @@ public class SecurityConfig {
                 // CSRF 対策: Cookie XSRF-TOKEN の値を、画面がヘッダー X-XSRF-TOKEN に入れて送る
                 .csrf(csrf -> csrf.spa())
                 .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
+                // ブラウザに「この画面は自分のサイトの部品だけを読み込む」と伝える(XSS が起きても外へ送れないようにする)。
+                // 外から読むのは、文字のフォント(Google Fonts)だけ。画像は自分のサイトと、投稿前のプレビュー(blob:)
+                .headers(headers -> headers
+                        .contentSecurityPolicy(csp -> csp.policyDirectives(CONTENT_SECURITY_POLICY))
+                        .referrerPolicy(referrer -> referrer.policy(ReferrerPolicy.SAME_ORIGIN)))
                 .securityContext(context -> context.securityContextRepository(sessionLogin.repository()))
                 // ログインは自前の API(/api/auth/login)で行うので、標準のログイン画面などは使わない
                 .formLogin(AbstractHttpConfigurer::disable)

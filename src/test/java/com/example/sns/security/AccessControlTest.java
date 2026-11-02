@@ -1,5 +1,6 @@
 package com.example.sns.security;
 
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.forwardedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -108,5 +109,14 @@ class AccessControlTest extends ApiTestSupport {
                 .andExpect(status().isBadRequest());
         browser.put("/api/admin/users/" + other.getId() + "/suspension", "{\"suspended\":true}")
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void すべての応答に_読み込み元を制限するヘッダーが付く() throws Exception {
+        browser().get("/api/auth/config")
+                .andExpect(header().string("Content-Security-Policy", org.hamcrest.Matchers.containsString("default-src 'self'")))
+                .andExpect(header().string("Content-Security-Policy", org.hamcrest.Matchers.containsString("frame-ancestors 'none'")))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("Referrer-Policy", "same-origin"));
     }
 }

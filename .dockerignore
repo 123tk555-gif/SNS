@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+!.env.example
+target
+logs
+uploads
+frontend/node_modules
+src/main/resources/static
+e2e
+docs
+prototype
+**/*.png

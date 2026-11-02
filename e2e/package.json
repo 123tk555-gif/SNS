@@ -1,0 +1,15 @@
+{
+  "name": "sns-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "description": "SNSタイムラインアプリの画面の操作テスト(Playwright)",
+  "type": "module",
+  "scripts": {
+    "test": "node run-all.mjs",
+    "cleanup": "node cleanup.mjs",
+    "audit": "node a11y-audit.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "1.64.1"
+  }
+}

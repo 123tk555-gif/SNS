@@ -21,6 +21,7 @@ export default function PostCard({ post, onChange = () => {}, onDelete, big = fa
   const [menuOpen, setMenuOpen] = useState(false)
   const [dialog, setDialog] = useState(null) // 'edit' | 'delete' | 'block' | { image: 番号 }
   const menuRef = useRef(null)
+  const moreRef = useRef(null)
 
   // メニューの外を押す・Esc キーで、メニューを閉じる
   useEffect(() => {
@@ -70,6 +71,14 @@ export default function PostCard({ post, onChange = () => {}, onDelete, big = fa
       onChange(post)
       notify(bookmarked ? 'ブックマークできませんでした' : 'ブックマークを解除できませんでした', { error: true })
     }
+  }
+
+  // メニューから確認の画面を開くとき、先にキーボードの位置を「…」ボタンへ戻しておく
+  // (メニューは閉じて消えるので、そのままだと、確認の画面を閉じたあとに戻る場所がなくなる)
+  function openDialog(name) {
+    moreRef.current?.focus()
+    setMenuOpen(false)
+    setDialog(name)
   }
 
   // ミュート(F-BLOCK-01): 開いている一覧からは、その人の投稿が消える(relations.js の知らせ)
@@ -147,7 +156,7 @@ export default function PostCard({ post, onChange = () => {}, onDelete, big = fa
             <span>{post.bookmarkedByMe ? 'ブックマーク済み' : 'ブックマーク'}</span>
           </button>
           <div className="menu-wrap" ref={menuRef}>
-            <button className="act" type="button" aria-label="その他の操作" aria-expanded={menuOpen}
+            <button ref={moreRef} className="act" type="button" aria-label="その他の操作" aria-expanded={menuOpen}
               onClick={() => setMenuOpen((open) => !open)}>
               <Icon name="more" size={20} />
             </button>
@@ -155,10 +164,10 @@ export default function PostCard({ post, onChange = () => {}, onDelete, big = fa
               <div className="menu" role="group" aria-label="投稿のメニュー">
                 {post.mine ? (
                   <>
-                    <button type="button" autoFocus onClick={() => { setMenuOpen(false); setDialog('edit') }}>
+                    <button type="button" autoFocus onClick={() => openDialog('edit')}>
                       編集
                     </button>
-                    <button type="button" className="danger" onClick={() => { setMenuOpen(false); setDialog('delete') }}>
+                    <button type="button" className="danger" onClick={() => openDialog('delete')}>
                       削除
                     </button>
                   </>
@@ -167,7 +176,7 @@ export default function PostCard({ post, onChange = () => {}, onDelete, big = fa
                     <button type="button" autoFocus onClick={mute}>
                       @{post.author.handle} さんをミュート
                     </button>
-                    <button type="button" className="danger" onClick={() => { setMenuOpen(false); setDialog('block') }}>
+                    <button type="button" className="danger" onClick={() => openDialog('block')}>
                       @{post.author.handle} さんをブロック
                     </button>
                   </>

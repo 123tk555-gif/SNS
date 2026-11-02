@@ -1,3 +1,2 @@
-/mvnw text eol=lf
+# シェルスクリプトは、Windows で取り出しても改行を LF のままにする(Linux のサーバーで動かすため)
 *.sh text eol=lf
-*.cmd text eol=crlf
