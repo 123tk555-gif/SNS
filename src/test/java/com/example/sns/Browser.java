@@ -4,11 +4,14 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 
 import jakarta.servlet.http.Cookie;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.AbstractMockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 /**
@@ -36,12 +39,26 @@ public class Browser {
         return perform(MockMvcRequestBuilders.put(url).contentType(MediaType.APPLICATION_JSON).content(json).with(csrf()));
     }
 
+    public ResultActions delete(String url) throws Exception {
+        return perform(MockMvcRequestBuilders.delete(url).with(csrf()));
+    }
+
+    /** 画像付きの送信(multipart/form-data)。params は「名前, 値, 名前, 値…」の順に並べる */
+    public ResultActions multipart(String url, List<MockMultipartFile> files, String... params) throws Exception {
+        MockMultipartHttpServletRequestBuilder request = MockMvcRequestBuilders.multipart(url);
+        files.forEach(request::file);
+        for (int i = 0; i + 1 < params.length; i += 2) {
+            request.param(params[i], params[i + 1]);
+        }
+        return perform(request.with(csrf()));
+    }
+
     /** CSRF 対策の値を付けずに送る(断られることを確かめる用) */
     public ResultActions postWithoutCsrf(String url, String json) throws Exception {
         return perform(MockMvcRequestBuilders.post(url).contentType(MediaType.APPLICATION_JSON).content(json));
     }
 
-    public ResultActions perform(MockHttpServletRequestBuilder request) throws Exception {
+    public ResultActions perform(AbstractMockHttpServletRequestBuilder<?> request) throws Exception {
         if (!cookies.isEmpty()) {
             request.cookie(cookies.values().toArray(Cookie[]::new));
         }

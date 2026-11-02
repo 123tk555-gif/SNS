@@ -56,11 +56,19 @@
 
 * { box-sizing: border-box; }
 
+/* BIZ UDPゴシックの「_」は細く低い位置に描かれ、拡大率 100〜125% の画面では見えなくなる
+   (ユーザーID の taro_dev が taro dev に見える)。「_」の 1 文字だけ、はっきり見えるフォントで表示する */
+@font-face {
+  font-family: "SNS Underscore";
+  src: local("Segoe UI"), local("Yu Gothic UI"), local("Helvetica Neue"), local("Arial");
+  unicode-range: U+005F;
+}
+
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: "BIZ UDPGothic", "BIZ UDPゴシック", "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif;
+  font-family: "SNS Underscore", "BIZ UDPGothic", "BIZ UDPゴシック", "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif;
   font-size: 18px;
   line-height: 1.6;
 }

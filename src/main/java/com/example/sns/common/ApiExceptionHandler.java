@@ -1,5 +1,6 @@
 package com.example.sns.common;
 
+import com.example.sns.media.ImageStorage;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -8,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -26,6 +28,12 @@ class ApiExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     ResponseEntity<ApiError> unreadableBody(HttpMessageNotReadableException e) {
         return ResponseEntity.badRequest().body(ApiError.of("リクエストの形式が正しくありません"));
+    }
+
+    /** 画像が 5MB を超えた(application.properties の spring.servlet.multipart.max-file-size) */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ResponseEntity<ApiError> tooLarge(MaxUploadSizeExceededException e) {
+        return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE).body(ApiError.of(ImageStorage.TOO_LARGE));
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)

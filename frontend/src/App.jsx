@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router'
 import { useAuth } from './auth.jsx'
 import AuthLayout from './components/AuthLayout.jsx'
+import ComingSoonPage from './pages/ComingSoonPage.jsx'
 import HomePage from './pages/HomePage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import NotFoundPage from './pages/NotFoundPage.jsx'
@@ -61,6 +62,16 @@ export default function App() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/onboarding" element={<RequireAuth allowBeforeOnboarding><OnboardingPage /></RequireAuth>} />
         <Route path="/" element={<RequireAuth><HomePage /></RequireAuth>} />
+        {/* まだ作っていない画面(どのマイルストーンで作るかを表示する) */}
+        <Route path="/posts/:id" element={<RequireAuth><ComingSoonPage title="投稿" milestone="M4(返信)" /></RequireAuth>} />
+        <Route path="/users/*" element={<RequireAuth><ComingSoonPage title="プロフィール" milestone="M5(フォロー)" showLogout /></RequireAuth>} />
+        <Route path="/notifications" element={<RequireAuth><ComingSoonPage title="通知" milestone="M6" /></RequireAuth>} />
+        <Route path="/search" element={<RequireAuth><ComingSoonPage title="検索" milestone="M7" /></RequireAuth>} />
+        <Route path="/trends" element={<RequireAuth><ComingSoonPage title="トレンド" milestone="M7" /></RequireAuth>} />
+        <Route path="/tags/:name" element={<RequireAuth><ComingSoonPage title="ハッシュタグ" milestone="M7" /></RequireAuth>} />
+        <Route path="/bookmarks" element={<RequireAuth><ComingSoonPage title="ブックマーク" milestone="M4" /></RequireAuth>} />
+        <Route path="/settings" element={<RequireAuth><ComingSoonPage title="設定" milestone="M8" showLogout /></RequireAuth>} />
+        <Route path="/admin" element={<RequireAuth><ComingSoonPage title="管理者画面" milestone="M9" /></RequireAuth>} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </AuthGate>

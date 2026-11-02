@@ -28,8 +28,14 @@ import org.springframework.test.web.servlet.MockMvc;
  * メールは実際には送らず、送ろうとした内容をあとから取り出せるようにする。
  */
 @Import(TestcontainersConfiguration.class)
-// .env に Google ログインの設定があっても、テストでは使わない
-@SpringBootTest(properties = {"sns.google.client-id=", "sns.google.client-secret="})
+// .env に Google ログインの設定があっても、テストでは使わない。画像はテスト用のフォルダに保存する。
+// SQL の回数を数えられるよう、Hibernate の統計を有効にする(N+1 のテスト用)
+@SpringBootTest(properties = {
+        "sns.google.client-id=", "sns.google.client-secret=",
+        "sns.upload-dir=target/test-uploads",
+        "spring.jpa.properties.hibernate.generate_statistics=true",
+        "logging.level.org.hibernate.engine.internal.StatisticalLoggingSessionEventListener=OFF",
+})
 @AutoConfigureMockMvc
 public abstract class ApiTestSupport {
 
@@ -52,6 +58,8 @@ public abstract class ApiTestSupport {
 
     @BeforeEach
     void cleanDatabase() {
+        jdbc.update("delete from post_images");
+        jdbc.update("delete from posts");
         jdbc.update("delete from email_tokens");
         jdbc.update("delete from users");
         jdbc.update("delete from spring_session");

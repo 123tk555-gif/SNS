@@ -46,14 +46,34 @@ class SeedData implements ApplicationRunner {
         this.jdbc = jdbc;
     }
 
+    /** 投稿の本文。上から順に、新しい投稿になる(作者は USERS を順番に回す) */
+    private static final String[] POSTS = {
+            "新しいカフェを見つけました。窓際の席が気持ちいい #カフェ巡り",
+            "Docker Compose で PostgreSQL 18 を立ち上げました。healthcheck を入れておくと起動順で困らなくなります #Docker",
+            "今日は #SpringBoot で REST API を作りました。@hanako さん、教えてくれてありがとう!",
+            "夕焼けがきれいでした #写真",
+            "期末試験が終わりました。これからポートフォリオ作りに集中します",
+            "React の useEffect の使い方を復習中",
+            "#カフェ巡り 3軒目。チーズケーキが絶品でした",
+            "AWS の料金を抑えるコツをまとめています。料金計算ツールが便利です https://calculator.aws/ #AWS",
+            "#写真 の練習で、毎朝同じ場所を撮っています",
+            "研究室のゼミが終わりました。今日は #React の勉強をします",
+    };
+    /** テスト投稿の数(無限スクロールを試せるよう、1 ページ 20 件より多くする) */
+    private static final int TEST_POSTS = 60;
+
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        jdbc.update("delete from post_images");
+        jdbc.update("delete from posts");
         jdbc.update("delete from email_tokens");
         jdbc.update("delete from users");
         jdbc.update("delete from spring_session");
         String hash = passwordEncoder.encode(PASSWORD);
-        for (SeedUser seed : USERS) {
+        long[] userIds = new long[USERS.length];
+        for (int i = 0; i < USERS.length; i++) {
+            SeedUser seed = USERS[i];
             User user = User.withPassword(seed.email(), hash);
             user.verifyEmail();
             user.completeOnboarding(seed.handle(), seed.name());
@@ -61,8 +81,19 @@ class SeedData implements ApplicationRunner {
             if (seed.handle().equals("taro_dev")) {
                 user.setRole(Role.ADMIN);
             }
-            users.save(user);
+            userIds[i] = users.save(user).getId();
         }
-        log.info("テストデータを入れました(ユーザー {} 人。パスワードはすべて {})", USERS.length, PASSWORD);
+        users.flush();
+
+        // 古い投稿から順に入れる(ID が大きいほど新しい)。投稿日時は 45 分ずつずらす
+        int total = POSTS.length + TEST_POSTS;
+        for (int n = total - 1; n >= 0; n--) {
+            String text = n < POSTS.length ? POSTS[n] : "テスト投稿です(" + (n - POSTS.length + 1) + "件目)";
+            jdbc.update("""
+                    insert into posts (author_id, text, hidden, created_at)
+                    values (?, ?, false, now() - make_interval(mins => ?))
+                    """, userIds[n % userIds.length], text, n * 45 + 3);
+        }
+        log.info("テストデータを入れました(ユーザー {} 人・投稿 {} 件。パスワードはすべて {})", USERS.length, total, PASSWORD);
     }
 }

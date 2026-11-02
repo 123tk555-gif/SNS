@@ -19,7 +19,11 @@ function readCookie(name) {
   return match ? decodeURIComponent(match[1]) : null
 }
 
-export async function api(path, { method = 'GET', body } = {}) {
+/**
+ * body: JSON で送るデータ。form: 画像付きで送るときの FormData(multipart/form-data。
+ * Content-Type はブラウザが区切りの文字列付きで自動で付けるので、ここでは付けない)
+ */
+export async function api(path, { method = 'GET', body, form } = {}) {
   const headers = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (method !== 'GET') {
@@ -29,6 +33,7 @@ export async function api(path, { method = 'GET', body } = {}) {
 
   const options = { method, headers, credentials: 'same-origin' }
   if (body !== undefined) options.body = JSON.stringify(body)
+  if (form !== undefined) options.body = form
 
   let response
   try {
