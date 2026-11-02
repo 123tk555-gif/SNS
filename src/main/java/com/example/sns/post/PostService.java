@@ -1,16 +1,23 @@
 package com.example.sns.post;
 
+import com.example.sns.hashtag.HashtagService;
+import com.example.sns.hashtag.Hashtags;
 import com.example.sns.media.ImageStorage;
 import com.example.sns.notification.NotificationService;
 import com.example.sns.notification.NotificationType;
 import com.example.sns.realtime.RealtimeEvents;
 import com.example.sns.user.UserRepository;
+import java.time.Instant;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -49,10 +56,13 @@ public class PostService {
     private final PostViews views;
     private final NotificationService notifications;
     private final ApplicationEventPublisher events;
+    private final HashtagService hashtags;
+    private final PostSearch search;
 
     public PostService(PostRepository posts, PostImageRepository images, LikeRepository likes,
             BookmarkRepository bookmarks, UserRepository users, ImageStorage storage, PostViews views,
-            NotificationService notifications, ApplicationEventPublisher events) {
+            NotificationService notifications, ApplicationEventPublisher events, HashtagService hashtags,
+            PostSearch search) {
         this.posts = posts;
         this.images = images;
         this.likes = likes;
@@ -62,6 +72,8 @@ public class PostService {
         this.views = views;
         this.notifications = notifications;
         this.events = events;
+        this.hashtags = hashtags;
+        this.search = search;
     }
 
     // ---- 作成・返信(F-POST-01〜03, F-POST-07) ----
@@ -98,6 +110,7 @@ public class PostService {
             images.save(new PostImage(post, stored.path(), alt, stored.width(), stored.height(), i));
         }
         posts.flush();
+        hashtags.tag(post.getId(), body);
 
         // 通知(F-NOTIF-01): 返信なら返信先の投稿者へ「返信」、本文のメンション相手へ「メンション」。
         // 返信先の投稿者がメンションもされていたら、「返信」の通知だけを送る
@@ -138,6 +151,7 @@ public class PostService {
         added.removeAll(NotificationService.mentionedHandles(post.getText()));
         post.edit(body);
         posts.flush();
+        hashtags.tag(post.getId(), body);
         Set<Long> repliedTo = post.getReplyToId() == null ? Set.of()
                 : posts.findWithAuthor(post.getReplyToId()).map(p -> Set.of(p.getAuthor().getId())).orElse(Set.of());
         notifications.notifyMentions(viewerId, post.getId(), added, repliedTo);
@@ -155,6 +169,7 @@ public class PostService {
         likes.deleteByPost(post);
         bookmarks.deleteByPost(post);
         notifications.deleteForPost(post.getId());
+        hashtags.untag(post.getId());
         List<PostImage> postImages = images.findByPost(post);
         images.deleteAll(postImages);
         storage.deleteAfterCommit(postImages.stream().map(PostImage::getPath).toList());
@@ -222,6 +237,44 @@ public class PostService {
     @Transactional(readOnly = true)
     public long countByAuthor(long authorId) {
         return posts.countByAuthor(authorId);
+    }
+
+    // ---- ハッシュタグ・トレンド・検索(F-TREND-02, 03, F-SEARCH-01, 03) ----
+
+    /** ハッシュタグを含む投稿(返信を含む)。新しい順 */
+    @Transactional(readOnly = true)
+    public Page byTag(String name, long viewerId, Long before, Integer limit) {
+        int size = pageSize(limit);
+        List<Post> found = posts.findByTag(Hashtags.normalize(name.replaceFirst("^[#＃]", "")),
+                before == null ? Long.MAX_VALUE : before, PageRequest.of(0, size + 1));
+        return page(found, size, viewerId);
+    }
+
+    /** 人気投稿: 直近 24 時間に作られた返信以外の投稿のうち、いいね数の多い順に上位 limit 件 */
+    @Transactional(readOnly = true)
+    public List<PostResponse> popular(long viewerId, int limit) {
+        return inOrder(posts.findPopularIds(Instant.now().minus(HashtagService.TREND_PERIOD), limit), viewerId);
+    }
+
+    /** 本文の検索。空白(全角・半角)で区切った言葉を、すべて含む投稿(返信を含む)を新しい順に */
+    @Transactional(readOnly = true)
+    public Page search(List<String> words, long viewerId, Long before, Integer limit) {
+        int size = pageSize(limit);
+        List<Long> ids = search.findIds(words, before == null ? Long.MAX_VALUE : before, size + 1);
+        boolean hasMore = ids.size() > size;
+        List<Long> pageIds = hasMore ? ids.subList(0, size) : ids;
+        return new Page(inOrder(pageIds, viewerId), hasMore ? pageIds.getLast() : null);
+    }
+
+    /** ID の順番どおりに、投稿を画面に返す形にする(投稿者つきで 1 回で取り、あとはまとめて取る) */
+    private List<PostResponse> inOrder(List<Long> ids, long viewerId) {
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Post> found = posts.findAllWithAuthor(ids).stream()
+                .collect(Collectors.toMap(Post::getId, Function.identity()));
+        List<Post> ordered = ids.stream().map(found::get).filter(Objects::nonNull).toList();
+        return views.toResponses(ordered, viewerId);
     }
 
     // ---- 返信の一覧(F-POST-08) ----

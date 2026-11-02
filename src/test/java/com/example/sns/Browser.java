@@ -3,6 +3,7 @@ package com.example.sns;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 
 import jakarta.servlet.http.Cookie;
+import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,8 +28,9 @@ public class Browser {
         this.mvc = mvc;
     }
 
+    /** url はそのまま送る(テストで URL 用に変換した値を、もう一度変換しないように URI で渡す) */
     public ResultActions get(String url) throws Exception {
-        return perform(MockMvcRequestBuilders.get(url));
+        return perform(MockMvcRequestBuilders.get(URI.create(url)));
     }
 
     public ResultActions post(String url, String json) throws Exception {

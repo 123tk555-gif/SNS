@@ -12,7 +12,10 @@ import OnboardingPage from './pages/OnboardingPage.jsx'
 import PostDetailPage from './pages/PostDetailPage.jsx'
 import ProfilePage from './pages/ProfilePage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
+import SearchPage from './pages/SearchPage.jsx'
 import SignupPage from './pages/SignupPage.jsx'
+import TagPage from './pages/TagPage.jsx'
+import TrendsPage from './pages/TrendsPage.jsx'
 import VerifyEmailPage from './pages/VerifyEmailPage.jsx'
 
 /** ログイン状態を確かめている間・確かめられなかったときの表示 */
@@ -74,9 +77,9 @@ export default function App() {
         <Route path="/users/:handle/following" element={<RequireAuth><FollowListPage kind="following" /></RequireAuth>} />
         <Route path="/users/:handle/followers" element={<RequireAuth><FollowListPage kind="followers" /></RequireAuth>} />
         <Route path="/notifications" element={<RequireAuth><NotificationsPage /></RequireAuth>} />
-        <Route path="/search" element={<RequireAuth><ComingSoonPage title="検索" milestone="M7" /></RequireAuth>} />
-        <Route path="/trends" element={<RequireAuth><ComingSoonPage title="トレンド" milestone="M7" /></RequireAuth>} />
-        <Route path="/tags/:name" element={<RequireAuth><ComingSoonPage title="ハッシュタグ" milestone="M7" /></RequireAuth>} />
+        <Route path="/search" element={<RequireAuth><SearchPage /></RequireAuth>} />
+        <Route path="/trends" element={<RequireAuth><TrendsPage /></RequireAuth>} />
+        <Route path="/tags/:name" element={<RequireAuth><TagPage /></RequireAuth>} />
         <Route path="/settings" element={<RequireAuth><ComingSoonPage title="設定" milestone="M8" showLogout /></RequireAuth>} />
         <Route path="/admin" element={<RequireAuth><ComingSoonPage title="管理者画面" milestone="M9" /></RequireAuth>} />
         <Route path="*" element={<NotFoundPage />} />

@@ -1,5 +1,7 @@
 package com.example.sns.profile;
 
+import com.example.sns.hashtag.HashtagService;
+import com.example.sns.hashtag.Hashtags;
 import com.example.sns.notification.NotificationService;
 import com.example.sns.notification.NotificationType;
 import com.example.sns.post.PostService;
@@ -96,6 +98,19 @@ public class ProfileService {
         User target = findVisible(handle, viewerId);
         follows.deleteOne(viewerId, target.getId());
         return new FollowResult(false, follows.countFollowers(target.getId()));
+    }
+
+    // ---- ユーザーの検索(F-SEARCH-02) ----
+
+    /** 先頭の「@」は無視する。最大 20 人 */
+    @Transactional(readOnly = true)
+    public List<UserSummary> search(String query, long viewerId) {
+        String word = Hashtags.normalize(query.strip().replaceFirst("^[@＠]", ""));
+        if (word.isEmpty()) {
+            return List.of();
+        }
+        String escaped = HashtagService.escapeLike(word);
+        return summaries(users.search("%" + escaped + "%", escaped + "%", 20), viewerId);
     }
 
     // ---- フォロー中・フォロワーの一覧(F-FOLLOW-02) ----

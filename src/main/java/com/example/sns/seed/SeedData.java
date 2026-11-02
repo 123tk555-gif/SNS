@@ -1,5 +1,6 @@
 package com.example.sns.seed;
 
+import com.example.sns.hashtag.HashtagService;
 import com.example.sns.user.Role;
 import com.example.sns.user.User;
 import com.example.sns.user.UserRepository;
@@ -39,11 +40,13 @@ class SeedData implements ApplicationRunner {
     private final UserRepository users;
     private final PasswordEncoder passwordEncoder;
     private final JdbcTemplate jdbc;
+    private final HashtagService hashtags;
 
-    SeedData(UserRepository users, PasswordEncoder passwordEncoder, JdbcTemplate jdbc) {
+    SeedData(UserRepository users, PasswordEncoder passwordEncoder, JdbcTemplate jdbc, HashtagService hashtags) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.jdbc = jdbc;
+        this.hashtags = hashtags;
     }
 
     /** 投稿の本文。上から順に、新しい投稿になる(作者は USERS を順番に回す) */
@@ -69,6 +72,7 @@ class SeedData implements ApplicationRunner {
         jdbc.update("delete from follows");
         jdbc.update("delete from likes");
         jdbc.update("delete from bookmarks");
+        jdbc.update("delete from post_hashtags");
         jdbc.update("delete from post_images");
         jdbc.update("delete from posts");
         jdbc.update("delete from email_tokens");
@@ -118,6 +122,10 @@ class SeedData implements ApplicationRunner {
                 cross join (select id from posts where reply_to_id is null order by id desc limit 3) p
                 where u.handle = 'taro_dev'
                 """);
+        // 投稿は SQL で直接入れたので、ハッシュタグをここで結びつける(トレンド・タグの投稿一覧に出るように)
+        jdbc.query("select id, text from posts", (row) -> {
+            hashtags.tag(row.getLong("id"), row.getString("text"));
+        });
         // フォロー: たろうははなこ・けんを、はなこ・ゆうと・みかはたろうをフォローしている
         jdbc.update("""
                 insert into follows (from_user_id, to_user_id, created_at)

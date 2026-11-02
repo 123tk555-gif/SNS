@@ -30,7 +30,8 @@ export function useTimeline(url, { cursorParam = 'before', posts: isPostList = f
         return [...(before ? current : []), ...page.items.filter((p) => !known.has(p.id))]
       })
       setCursor(page.nextCursor)
-      setHasMore(page.nextCursor !== null)
+      // nextCursor がない一覧(検索結果のユーザーなど)も、続きなしとして扱う
+      setHasMore(page.nextCursor != null)
     } catch (e) {
       setError(e.message)
     } finally {

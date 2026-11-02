@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, useNavigate } from 'react-router'
+import { Link, NavLink, useNavigate } from 'react-router'
+import { api } from '../api.js'
 import { useAuth } from '../auth.jsx'
 import { useRealtime } from '../realtime.jsx'
 import Composer from './Composer.jsx'
 import Icon from './Icon.jsx'
 import Modal from './Modal.jsx'
+import TrendList from './TrendList.jsx'
 
 /**
  * ログイン後の画面の枠(画面仕様定義書 3.1・3.2)。PC は左のメニュー、スマートフォンは下のメニューと右下の「投稿する」。
@@ -98,6 +100,7 @@ export default function Layout({ title, sub, actions, back = false, focusHeading
           </div>
           {children}
         </main>
+        <RightColumn />
       </div>
       <button className="btn btn-primary fab" type="button" onClick={() => setComposing(true)}>
         <Icon name="pen" />
@@ -114,5 +117,44 @@ export default function Layout({ title, sub, actions, back = false, focusHeading
         </Modal>
       )}
     </>
+  )
+}
+
+/** PC(幅 1024px 以上)の右の列: 検索欄とトレンドの上位 5 件(画面仕様定義書 3.1) */
+function RightColumn() {
+  const navigate = useNavigate()
+  const [text, setText] = useState('')
+  const [tags, setTags] = useState(null)
+  const [wide] = useState(() => window.matchMedia('(min-width: 1024px)').matches)
+
+  // 右の列を出さない画面の幅(タブレット・スマートフォン)では、トレンドを取りに行かない
+  useEffect(() => {
+    if (!wide) return
+    api('/api/trends').then((r) => setTags(r.tags.slice(0, 5))).catch(() => setTags([]))
+  }, [wide])
+
+  function submit(event) {
+    event.preventDefault()
+    const query = text.trim()
+    if (!query) return
+    const tab = /^[@＠]/.test(query) ? 'users' : /^[#＃]/.test(query) ? 'tags' : 'posts'
+    navigate(`/search?q=${encodeURIComponent(query)}&tab=${tab}`)
+  }
+
+  return (
+    <aside className="right" aria-label="検索とトレンド">
+      <form className="panel" role="search" onSubmit={submit}>
+        <label className="sr-only" htmlFor="side-search">
+          検索
+        </label>
+        <input type="search" id="side-search" value={text} placeholder="キーワード・@ユーザーID・#タグで検索"
+          onChange={(e) => setText(e.target.value)} />
+      </form>
+      <section className="panel">
+        <h2>トレンド</h2>
+        {tags ? <TrendList tags={tags} /> : <p role="status">読み込み中…</p>}
+        <Link to="/trends">トレンドをすべて見る</Link>
+      </section>
+    </aside>
   )
 }

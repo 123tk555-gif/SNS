@@ -62,6 +62,7 @@ public abstract class ApiTestSupport {
         jdbc.update("delete from follows");
         jdbc.update("delete from likes");
         jdbc.update("delete from bookmarks");
+        jdbc.update("delete from post_hashtags");
         jdbc.update("delete from post_images");
         jdbc.update("delete from posts");
         jdbc.update("delete from email_tokens");

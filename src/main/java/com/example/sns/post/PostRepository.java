@@ -1,5 +1,6 @@
 package com.example.sns.post;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -76,6 +77,31 @@ interface PostRepository extends JpaRepository<Post, Long> {
     List<Post> findByAuthor(@Param("authorId") long authorId, @Param("includeReplies") boolean includeReplies,
             @Param("mediaOnly") boolean mediaOnly, @Param("includeHidden") boolean includeHidden,
             @Param("before") long before, Pageable pageable);
+
+    /** ハッシュタグの投稿一覧(F-TREND-03, F-SEARCH-03): そのタグを含む投稿(返信を含む)を新しい順に */
+    @Query("""
+            select p from Post p join fetch p.author a
+            where p.deletedAt is null and p.hidden = false and a.suspended = false and p.id < :before
+              and p.id in (select ph.post.id from PostHashtag ph where ph.hashtag.name = :name)
+            order by p.id desc
+            """)
+    List<Post> findByTag(@Param("name") String name, @Param("before") long before, Pageable pageable);
+
+    /**
+     * 人気投稿(F-TREND-02): since 以降に作られた返信以外の投稿のうち、いいねが 1 件以上あるものの ID を、
+     * いいね数の多い順に(同じ数なら新しい順)
+     */
+    @Query(value = """
+            select p.id from posts p
+            join users u on u.id = p.author_id
+            join likes l on l.post_id = p.id
+            where p.reply_to_id is null and p.deleted_at is null and p.hidden = false and u.suspended = false
+              and p.created_at >= :since
+            group by p.id
+            order by count(l.id) desc, p.id desc
+            limit :limit
+            """, nativeQuery = true)
+    List<Long> findPopularIds(@Param("since") Instant since, @Param("limit") int limit);
 
     /** プロフィールに出す投稿数(削除・非表示を除く) */
     @Query("select count(p) from Post p where p.author.id = :authorId and p.deletedAt is null and p.hidden = false")
