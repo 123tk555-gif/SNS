@@ -71,6 +71,9 @@ body {
   font-family: "SNS Underscore", "BIZ UDPGothic", "BIZ UDPゴシック", "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif;
   font-size: 18px;
   line-height: 1.6;
+  /* 新着を先頭に足したときのスクロールの位置は、タイムライン(HomePage)が自分で合わせる。
+     ブラウザの自動の調整(scroll anchoring)と重なって二重に動かないよう、自動の調整は止める(Safari では元から無いため) */
+  overflow-anchor: none;
 }
 
 a { color: var(--accent); text-underline-offset: 3px; }
@@ -637,7 +640,9 @@ h1[tabindex="-1"]:focus { outline: none; }
   padding: 0 6px;
   margin-right: 6px;
 }
-.notif .preview { color: var(--muted); font-size: 16px; margin: 2px 0 0; }
+.notif .preview { color: var(--muted); font-size: 16px; margin: 2px 0 0; display: block; }
+.notif .body { display: flex; flex-direction: column; color: var(--text); text-decoration: none; }
+.notif .body:hover { text-decoration: underline; }
 .notif .when { color: var(--muted); font-size: 15px; }
 
 /* ---- 検索・トレンド ---- */

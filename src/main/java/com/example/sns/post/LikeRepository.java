@@ -8,13 +8,13 @@ import org.springframework.data.repository.query.Param;
 
 interface LikeRepository extends JpaRepository<Like, Long> {
 
-    /** いいねする。すでにいいね済みなら何もしない(同時に 2 回押されても、エラーにせず 1 件だけ残る) */
+    /** いいねする。すでにいいね済みなら何もしない(同時に 2 回押されても、エラーにせず 1 件だけ残る)。登録した件数(0 か 1)を返す */
     @Modifying
     @Query(value = """
             insert into likes (user_id, post_id, created_at) values (:userId, :postId, now())
             on conflict (user_id, post_id) do nothing
             """, nativeQuery = true)
-    void insertIfAbsent(@Param("userId") long userId, @Param("postId") long postId);
+    int insertIfAbsent(@Param("userId") long userId, @Param("postId") long postId);
 
     @Query("select count(l) from Like l where l.post.id = :postId")
     long countByPost(@Param("postId") long postId);

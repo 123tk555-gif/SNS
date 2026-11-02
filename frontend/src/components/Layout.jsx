@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router'
 import { useAuth } from '../auth.jsx'
+import { useRealtime } from '../realtime.jsx'
 import Composer from './Composer.jsx'
 import Icon from './Icon.jsx'
 import Modal from './Modal.jsx'
@@ -13,14 +14,23 @@ import Modal from './Modal.jsx'
  */
 export default function Layout({ title, sub, actions, back = false, focusHeading = true, children }) {
   const { user } = useAuth()
+  const { unreadCount } = useRealtime()
   const navigate = useNavigate()
   const heading = useRef(null)
   const [composing, setComposing] = useState(false)
+  const [announcement, setAnnouncement] = useState('')
+  const previousUnread = useRef(unreadCount)
 
   useEffect(() => {
     document.title = `${title} / SNS`
     if (focusHeading) heading.current?.focus()
   }, [title, focusHeading])
+
+  // 未読の数が増えたら、読み上げソフトにも伝える(F-NOTIF-03)
+  useEffect(() => {
+    if (unreadCount > previousUnread.current) setAnnouncement(`通知が届きました。未読は ${unreadCount}件です`)
+    previousUnread.current = unreadCount
+  }, [unreadCount])
 
   const items = [
     { to: '/', label: 'ホーム', icon: 'home', end: true },
@@ -38,6 +48,9 @@ export default function Layout({ title, sub, actions, back = false, focusHeading
       <a className="skip-link" href="#main">
         本文へ移動
       </a>
+      <div className="sr-only" aria-live="polite">
+        {announcement}
+      </div>
       <div className="shell">
         <nav className="side" aria-label="メインメニュー">
           <NavLink className="brand hide-sm" to="/">
@@ -50,6 +63,14 @@ export default function Layout({ title, sub, actions, back = false, focusHeading
             <NavLink key={item.to} to={item.to} end={item.end} className={`nav-item${item.hideSm ? ' hide-sm' : ''}`}>
               <Icon name={item.icon} size={26} />
               <span className="nav-label">{item.label}</span>
+              {item.to === '/notifications' && unreadCount > 0 && (
+                <>
+                  <span className="badge" aria-hidden="true">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                  <span className="sr-only">(未読 {unreadCount}件)</span>
+                </>
+              )}
             </NavLink>
           ))}
           <button className="btn btn-primary compose-side hide-sm" type="button" aria-label="投稿する"

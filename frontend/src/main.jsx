@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router'
 import App from './App.jsx'
 import { AuthProvider } from './auth.jsx'
 import { NoticeProvider } from './notice.jsx'
+import { RealtimeProvider } from './realtime.jsx'
 import './styles.css'
 
 createRoot(document.getElementById('root')).render(
@@ -11,7 +12,9 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <NoticeProvider>
         <AuthProvider>
-          <App />
+          <RealtimeProvider>
+            <App />
+          </RealtimeProvider>
         </AuthProvider>
       </NoticeProvider>
     </BrowserRouter>

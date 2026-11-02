@@ -73,15 +73,23 @@ class PostController {
         return ResponseEntity.noContent().build();
     }
 
-    /** タイムライン。tab は all(すべて)か following(フォロー中) */
+    /**
+     * タイムライン。tab は all(すべて)か following(フォロー中)。
+     * after を渡すと、それより新しい投稿を古い順に返す(新着の取り込み。機能定義書 3.5)
+     */
     @GetMapping("/api/timeline")
     PostService.Page timeline(@AuthenticationPrincipal LoginUser me,
             @RequestParam(defaultValue = "all") String tab,
             @RequestParam(required = false) Long before,
+            @RequestParam(required = false) Long after,
             @RequestParam(required = false) Integer limit) {
         if (!tab.equals("all") && !tab.equals("following")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "tab の値が正しくありません");
         }
-        return service.timeline(me.id(), tab.equals("following"), before, limit);
+        boolean following = tab.equals("following");
+        if (after != null) {
+            return service.timelineAfter(me.id(), following, after);
+        }
+        return service.timeline(me.id(), following, before, limit);
     }
 }

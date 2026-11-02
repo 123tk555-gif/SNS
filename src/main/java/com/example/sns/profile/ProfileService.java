@@ -1,5 +1,7 @@
 package com.example.sns.profile;
 
+import com.example.sns.notification.NotificationService;
+import com.example.sns.notification.NotificationType;
 import com.example.sns.post.PostService;
 import com.example.sns.user.User;
 import com.example.sns.user.UserRepository;
@@ -15,7 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * プロフィールとフォロー(機能定義書 3.2・3.6)。
- * フォローの通知は M6、ブロックの関係にある相手への制限は M8 で加える。
+ * ブロックの関係にある相手への制限は M8 で加える。
  */
 @Service
 @Transactional
@@ -30,11 +32,14 @@ public class ProfileService {
     private final UserRepository users;
     private final FollowRepository follows;
     private final PostService posts;
+    private final NotificationService notifications;
 
-    public ProfileService(UserRepository users, FollowRepository follows, PostService posts) {
+    public ProfileService(UserRepository users, FollowRepository follows, PostService posts,
+            NotificationService notifications) {
         this.users = users;
         this.follows = follows;
         this.posts = posts;
+        this.notifications = notifications;
     }
 
     /** ユーザーIDからユーザーを探す。初期設定前・利用停止中(本人以外が見るとき)は見つからない扱い */
@@ -69,14 +74,22 @@ public class ProfileService {
 
     // ---- フォロー(F-FOLLOW-01, 03) ----
 
-    /** 何度送っても同じ結果。自分自身は 400 */
+    /** 何度送っても同じ結果。自分自身は 400。新しくフォローしたときだけ、相手に「フォロー」の通知を作る */
     public FollowResult follow(long viewerId, String handle) {
         User target = findVisible(handle, viewerId);
         if (target.getId() == viewerId) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, CANNOT_FOLLOW_SELF);
         }
-        follows.insertIfAbsent(viewerId, target.getId());
+        if (follows.insertIfAbsent(viewerId, target.getId()) == 1) {
+            notifications.notify(NotificationType.FOLLOW, viewerId, target.getId(), null);
+        }
         return new FollowResult(true, follows.countFollowers(target.getId()));
+    }
+
+    /** その人をフォローしている人の ID(新着の投稿を「フォロー中」に足すかを決めるため。RealtimeDispatcher で使う) */
+    @Transactional(readOnly = true)
+    public Set<Long> followerIds(long userId) {
+        return new HashSet<>(follows.followerIds(userId));
     }
 
     public FollowResult unfollow(long viewerId, String handle) {

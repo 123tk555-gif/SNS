@@ -1,5 +1,7 @@
 package com.example.sns.user;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -18,6 +20,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByHandleLower(String handleLower);
 
     Optional<User> findByHandleLower(String handleLower);
+
+    List<User> findByHandleLowerIn(Collection<String> handleLowers);
 
     /** 管理者画面のユーザー一覧: ユーザーID・表示名・メールアドレスの部分一致。登録の新しい順 */
     @Query("""

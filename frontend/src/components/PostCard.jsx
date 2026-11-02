@@ -70,7 +70,8 @@ export default function PostCard({ post, onChange = () => {}, onDelete, big = fa
   }
 
   return (
-    <article className={`card${big ? ' big' : ''}`} aria-label={`${post.author.displayName}さんの投稿`}>
+    <article className={`card${big ? ' big' : ''}${post.isNew ? ' is-new' : ''}`}
+      aria-label={`${post.author.displayName}さんの投稿`}>
       <Avatar user={post.author} />
       <div className="card-body">
         {post.replyTo && (
@@ -91,6 +92,7 @@ export default function PostCard({ post, onChange = () => {}, onDelete, big = fa
             <time dateTime={post.createdAt}>{big ? fullTime(post.createdAt) : relativeTime(post.createdAt)}</time>
           </Link>
           {post.editedAt && <span className="edited">(編集済み)</span>}
+          {post.isNew && <span className="label-new">新着</span>}
         </div>
         {post.hidden && <p className="notice-hidden">管理者により非表示になりました</p>}
         {post.text && (

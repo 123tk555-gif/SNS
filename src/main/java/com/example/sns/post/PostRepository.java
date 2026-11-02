@@ -40,6 +40,27 @@ interface PostRepository extends JpaRepository<Post, Long> {
     List<Post> findFollowingTimeline(@Param("viewerId") long viewerId, @Param("before") long before,
             Pageable pageable);
 
+    /** 「すべて」の新着の取り込み(機能定義書 3.5): after より新しい投稿を古い順に */
+    @Query("""
+            select p from Post p join fetch p.author a
+            where p.replyToId is null and p.deletedAt is null and p.hidden = false and a.suspended = false
+              and p.id > :after
+            order by p.id asc
+            """)
+    List<Post> findTimelineAfter(@Param("after") long after, Pageable pageable);
+
+    /** 「フォロー中」の新着の取り込み: after より新しい投稿を古い順に */
+    @Query("""
+            select p from Post p join fetch p.author a
+            where p.replyToId is null and p.deletedAt is null and p.hidden = false and a.suspended = false
+              and p.id > :after
+              and (a.id = :viewerId
+                   or a.id in (select f.followee.id from Follow f where f.follower.id = :viewerId))
+            order by p.id asc
+            """)
+    List<Post> findFollowingTimelineAfter(@Param("viewerId") long viewerId, @Param("after") long after,
+            Pageable pageable);
+
     /**
      * ある人の投稿の一覧(プロフィール。F-PROF-03, 04)。新しい順。
      * includeReplies: 返信も含めるか / mediaOnly: 画像付きだけか / includeHidden: 管理者に非表示にされた投稿も含めるか(本人のとき)

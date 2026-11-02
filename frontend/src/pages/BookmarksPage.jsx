@@ -7,7 +7,7 @@ import { useTimeline } from '../useTimeline.js'
  * 解除しても、画面を開き直すまでは一覧から消さない(押し間違えたときに戻せるように)。
  */
 export default function BookmarksPage() {
-  const bookmarks = useTimeline('/api/bookmarks')
+  const bookmarks = useTimeline('/api/bookmarks', { posts: true })
   return (
     <Layout title="ブックマーク" sub="あなただけに表示されます">
       <PostList {...bookmarks}

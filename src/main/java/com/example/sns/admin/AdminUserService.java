@@ -1,5 +1,6 @@
 package com.example.sns.admin;
 
+import com.example.sns.realtime.StreamRegistry;
 import com.example.sns.security.SessionKiller;
 import com.example.sns.user.Role;
 import com.example.sns.user.User;
@@ -24,10 +25,12 @@ public class AdminUserService {
 
     private final UserRepository users;
     private final SessionKiller sessionKiller;
+    private final StreamRegistry streams;
 
-    public AdminUserService(UserRepository users, SessionKiller sessionKiller) {
+    public AdminUserService(UserRepository users, SessionKiller sessionKiller, StreamRegistry streams) {
         this.users = users;
         this.sessionKiller = sessionKiller;
+        this.streams = streams;
     }
 
     @Transactional(readOnly = true)
@@ -35,7 +38,7 @@ public class AdminUserService {
         return users.searchForAdmin(q == null ? "" : q.strip(), PageRequest.of(Math.max(page, 0), PAGE_SIZE));
     }
 
-    /** 利用停止・解除。停止したら、そのユーザーのセッションをすべて消す(すぐにログアウトされる) */
+    /** 利用停止・解除。停止したら、そのユーザーのセッションと SSE の接続をすべて消す(すぐにログアウトされる) */
     public User setSuspended(long adminId, long userId, boolean suspended) {
         User user = users.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "ユーザーが見つかりません"));
@@ -45,6 +48,7 @@ public class AdminUserService {
         user.setSuspended(suspended);
         if (suspended) {
             sessionKiller.killAll(user.getId(), null);
+            streams.disconnect(user.getId());
         }
         log.info("管理者 {} がユーザー {} を{}", adminId, userId, suspended ? "利用停止にしました" : "利用停止から戻しました");
         return user;

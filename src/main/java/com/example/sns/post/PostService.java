@@ -1,11 +1,17 @@
 package com.example.sns.post;
 
 import com.example.sns.media.ImageStorage;
+import com.example.sns.notification.NotificationService;
+import com.example.sns.notification.NotificationType;
+import com.example.sns.realtime.RealtimeEvents;
 import com.example.sns.user.UserRepository;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -41,9 +47,12 @@ public class PostService {
     private final UserRepository users;
     private final ImageStorage storage;
     private final PostViews views;
+    private final NotificationService notifications;
+    private final ApplicationEventPublisher events;
 
     public PostService(PostRepository posts, PostImageRepository images, LikeRepository likes,
-            BookmarkRepository bookmarks, UserRepository users, ImageStorage storage, PostViews views) {
+            BookmarkRepository bookmarks, UserRepository users, ImageStorage storage, PostViews views,
+            NotificationService notifications, ApplicationEventPublisher events) {
         this.posts = posts;
         this.images = images;
         this.likes = likes;
@@ -51,6 +60,8 @@ public class PostService {
         this.users = users;
         this.storage = storage;
         this.views = views;
+        this.notifications = notifications;
+        this.events = events;
     }
 
     // ---- 作成・返信(F-POST-01〜03, F-POST-07) ----
@@ -71,9 +82,8 @@ public class PostService {
             }
         }
 
-        if (replyToId != null && posts.findWithAuthor(replyToId).filter(Post::isVisible).isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "返信先の投稿が見つかりません");
-        }
+        Post parent = replyToId == null ? null : posts.findWithAuthor(replyToId).filter(Post::isVisible)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "返信先の投稿が見つかりません"));
 
         Post post = posts.save(new Post(users.getReferenceById(authorId), body, replyToId));
 
@@ -88,6 +98,18 @@ public class PostService {
             images.save(new PostImage(post, stored.path(), alt, stored.width(), stored.height(), i));
         }
         posts.flush();
+
+        // 通知(F-NOTIF-01): 返信なら返信先の投稿者へ「返信」、本文のメンション相手へ「メンション」。
+        // 返信先の投稿者がメンションもされていたら、「返信」の通知だけを送る
+        Set<Long> repliedTo = parent == null ? Set.of() : Set.of(parent.getAuthor().getId());
+        if (parent != null) {
+            notifications.notify(NotificationType.REPLY, authorId, parent.getAuthor().getId(), post.getId());
+        }
+        notifications.notifyMentions(authorId, post.getId(), NotificationService.mentionedHandles(body), repliedTo);
+        // 返信以外は、接続中の人のタイムラインにすぐに届ける(F-TL-04。保存が確定したあとに送る)
+        if (parent == null) {
+            events.publishEvent(new RealtimeEvents.PostCreated(post.getId(), authorId));
+        }
         return views.toResponse(post, authorId);
     }
 
@@ -107,26 +129,37 @@ public class PostService {
 
     // ---- 編集(F-POST-05) ----
 
+    /** 編集で新しく増えたメンションの相手にだけ、通知を作る(機能定義書 3.3) */
     public PostResponse edit(long id, long viewerId, String text) {
         Post post = findOwnPost(id, viewerId);
         String body = normalize(text);
         requireValidText(body, !images.findByPost(post).isEmpty());
+        Set<String> added = new LinkedHashSet<>(NotificationService.mentionedHandles(body));
+        added.removeAll(NotificationService.mentionedHandles(post.getText()));
         post.edit(body);
         posts.flush();
+        Set<Long> repliedTo = post.getReplyToId() == null ? Set.of()
+                : posts.findWithAuthor(post.getReplyToId()).map(p -> Set.of(p.getAuthor().getId())).orElse(Set.of());
+        notifications.notifyMentions(viewerId, post.getId(), added, repliedTo);
         return views.toResponse(post, viewerId);
     }
 
     // ---- 削除(F-POST-06) ----
 
-    /** 行は残して削除済みにし、本文を空にする。画像は行もファイルも消す。いいね・ブックマークも消す */
+    /**
+     * 行は残して削除済みにし、本文を空にする。画像は行もファイルも消す。いいね・ブックマーク・通知も消す。
+     * 開いている画面からも消えるよう、接続中の全員に知らせる
+     */
     public void delete(long id, long viewerId) {
         Post post = findOwnPost(id, viewerId);
         likes.deleteByPost(post);
         bookmarks.deleteByPost(post);
+        notifications.deleteForPost(post.getId());
         List<PostImage> postImages = images.findByPost(post);
         images.deleteAll(postImages);
         storage.deleteAfterCommit(postImages.stream().map(PostImage::getPath).toList());
         post.markDeleted();
+        events.publishEvent(new RealtimeEvents.PostRemoved(post.getId()));
     }
 
     // ---- タイムライン(F-TL-01, 03) ----
@@ -142,6 +175,28 @@ public class PostService {
                 ? posts.findFollowingTimeline(viewerId, cursor, request)
                 : posts.findTimeline(cursor, request);
         return page(found, size, viewerId);
+    }
+
+    /** 新着の取り込みで一度に返す数(機能定義書 3.5) */
+    static final int CATCH_UP_LIMIT = 50;
+
+    /**
+     * 新着の取り込み(F-TL-04): SSE がつなぎ直したときに、その間に増えた投稿(after より新しいもの)を
+     * 古い順に最大 50 件返す。それより多いときは nextCursor が null 以外になる(画面はタイムラインを読み込み直す)
+     */
+    @Transactional(readOnly = true)
+    public Page timelineAfter(long viewerId, boolean following, long after) {
+        PageRequest request = PageRequest.of(0, CATCH_UP_LIMIT + 1);
+        List<Post> found = following
+                ? posts.findFollowingTimelineAfter(viewerId, after, request)
+                : posts.findTimelineAfter(after, request);
+        return page(found, CATCH_UP_LIMIT, viewerId);
+    }
+
+    /** SSE で配信する投稿(見る人ごとの「いいね済み」などは、新しい投稿なのでまだない) */
+    @Transactional(readOnly = true)
+    public PostResponse forBroadcast(long postId) {
+        return posts.findWithAuthor(postId).filter(Post::isVisible).map(post -> views.toResponse(post, -1)).orElse(null);
     }
 
     // ---- ある人の投稿の一覧(プロフィール。F-PROF-03, 04) ----

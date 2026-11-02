@@ -142,7 +142,7 @@ export default function ProfilePage() {
 }
 
 function AuthorPosts({ handle, tab }) {
-  const list = useTimeline(`/api/users/${encodeURIComponent(handle)}/posts?tab=${tab}`)
+  const list = useTimeline(`/api/users/${encodeURIComponent(handle)}/posts?tab=${tab}`, { posts: true })
   return (
     <PostList {...list} emptyText="まだ投稿がありません" onLoadMore={list.loadMore} onRetry={list.retry}
       onChange={list.replace} onDelete={list.remove} />

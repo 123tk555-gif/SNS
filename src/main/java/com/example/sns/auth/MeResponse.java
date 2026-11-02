@@ -14,10 +14,9 @@ public record MeResponse(
         boolean onboarded,
         long unreadNotificationCount) {
 
-    static MeResponse from(User user) {
+    static MeResponse from(User user, long unreadNotificationCount) {
         String avatarUrl = user.getAvatarPath() == null ? null : "/media/" + user.getAvatarPath();
-        // 通知は M6 で作る。それまでは 0
         return new MeResponse(user.getId(), user.getEmail(), user.getHandle(), user.getDisplayName(), avatarUrl,
-                user.getRole(), user.isOnboarded(), 0);
+                user.getRole(), user.isOnboarded(), unreadNotificationCount);
     }
 }

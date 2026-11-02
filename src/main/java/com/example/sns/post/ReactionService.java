@@ -1,5 +1,7 @@
 package com.example.sns.post;
 
+import com.example.sns.notification.NotificationService;
+import com.example.sns.notification.NotificationType;
 import java.util.List;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -9,7 +11,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * いいね・ブックマーク(機能定義書 3.4)。どちらも何度送っても同じ結果になる(すでにいいね済みでも、もう一度 PUT してよい)。
- * いいねの通知は M6、ブロックの関係にある相手への制限は M8 で加える。
+ * ブロックの関係にある相手への制限は M8 で加える。
  */
 @Service
 @Transactional
@@ -25,19 +27,25 @@ public class ReactionService {
     private final LikeRepository likes;
     private final BookmarkRepository bookmarks;
     private final PostViews views;
+    private final NotificationService notifications;
 
-    public ReactionService(PostRepository posts, LikeRepository likes, BookmarkRepository bookmarks, PostViews views) {
+    public ReactionService(PostRepository posts, LikeRepository likes, BookmarkRepository bookmarks, PostViews views,
+            NotificationService notifications) {
         this.posts = posts;
         this.likes = likes;
         this.bookmarks = bookmarks;
         this.views = views;
+        this.notifications = notifications;
     }
 
     // ---- いいね(F-REACT-01〜03) ----
 
+    /** 新しくいいねしたときだけ、投稿者に「いいね」の通知を作る(F-NOTIF-01) */
     public LikeResult like(long userId, long postId) {
-        visiblePost(postId);
-        likes.insertIfAbsent(userId, postId);
+        Post post = visiblePost(postId);
+        if (likes.insertIfAbsent(userId, postId) == 1) {
+            notifications.notify(NotificationType.LIKE, userId, post.getAuthor().getId(), postId);
+        }
         return new LikeResult(true, likes.countByPost(postId));
     }
 

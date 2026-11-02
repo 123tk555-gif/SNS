@@ -3,6 +3,7 @@ package com.example.sns.security;
 import com.example.sns.auth.GoogleLoginHandler;
 import com.example.sns.common.ApiError;
 import com.example.sns.user.UserRepository;
+import jakarta.servlet.DispatcherType;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -52,6 +53,8 @@ public class SecurityConfig {
                 .logout(AbstractHttpConfigurer::disable)
                 .requestCache(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
+                        // SSE(/api/stream)が終わるときなどの内部の処理の続き。最初のリクエストで確かめ済み
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 "/api/auth/signup", "/api/auth/login", "/api/auth/logout",
                                 "/api/auth/verify-email", "/api/auth/verify-email/resend",

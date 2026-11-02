@@ -9,13 +9,13 @@ import org.springframework.data.repository.query.Param;
 
 interface FollowRepository extends JpaRepository<Follow, Long> {
 
-    /** フォローする。すでにフォロー済みなら何もしない(同時に 2 回押されても、エラーにせず 1 件だけ残る) */
+    /** フォローする。すでにフォロー済みなら何もしない(同時に 2 回押されても、エラーにせず 1 件だけ残る)。登録した件数(0 か 1)を返す */
     @Modifying
     @Query(value = """
             insert into follows (from_user_id, to_user_id, created_at) values (:followerId, :followeeId, now())
             on conflict (from_user_id, to_user_id) do nothing
             """, nativeQuery = true)
-    void insertIfAbsent(@Param("followerId") long followerId, @Param("followeeId") long followeeId);
+    int insertIfAbsent(@Param("followerId") long followerId, @Param("followeeId") long followeeId);
 
     @Modifying
     @Query("delete from Follow f where f.follower.id = :followerId and f.followee.id = :followeeId")
@@ -44,6 +44,10 @@ interface FollowRepository extends JpaRepository<Follow, Long> {
             order by f.id desc
             """)
     List<Follow> findFollowers(@Param("userId") long userId, @Param("before") long before, Pageable pageable);
+
+    /** その人をフォローしている人の ID */
+    @Query("select f.follower.id from Follow f where f.followee.id = :userId")
+    List<Long> followerIds(@Param("userId") long userId);
 
     /** userIds のうち、見る人がフォローしている人(N+1 にしないため、まとめて 1 回で取る) */
     @Query("select f.followee.id from Follow f where f.follower.id = :viewerId and f.followee.id in :userIds")

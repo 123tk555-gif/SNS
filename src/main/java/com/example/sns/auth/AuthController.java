@@ -1,5 +1,6 @@
 package com.example.sns.auth;
 
+import com.example.sns.notification.NotificationService;
 import com.example.sns.security.GoogleSettings;
 import com.example.sns.security.LoginUser;
 import com.example.sns.security.SessionLogin;
@@ -33,12 +34,15 @@ class AuthController {
     private final UserRepository users;
     private final SessionLogin sessionLogin;
     private final GoogleSettings google;
+    private final NotificationService notifications;
 
-    AuthController(AuthService auth, UserRepository users, SessionLogin sessionLogin, GoogleSettings google) {
+    AuthController(AuthService auth, UserRepository users, SessionLogin sessionLogin, GoogleSettings google,
+            NotificationService notifications) {
         this.auth = auth;
         this.users = users;
         this.sessionLogin = sessionLogin;
         this.google = google;
+        this.notifications = notifications;
     }
 
     /** 画面が最初に呼ぶ。Google ログインのボタンを出すかを返す(ついでに CSRF 対策の Cookie も受け取る) */
@@ -59,7 +63,7 @@ class AuthController {
             HttpServletResponse httpResponse) {
         User user = auth.verifyEmail(request.token());
         sessionLogin.login(user, httpRequest, httpResponse);
-        return MeResponse.from(user);
+        return me(user);
     }
 
     @PostMapping("/api/auth/verify-email/resend")
@@ -73,7 +77,7 @@ class AuthController {
             HttpServletResponse httpResponse) {
         User user = auth.login(request.email(), request.password());
         sessionLogin.login(user, httpRequest, httpResponse);
-        return MeResponse.from(user);
+        return me(user);
     }
 
     @PostMapping("/api/auth/logout")
@@ -84,7 +88,7 @@ class AuthController {
 
     @GetMapping("/api/auth/me")
     MeResponse me(@AuthenticationPrincipal LoginUser login) {
-        return MeResponse.from(currentUser(login));
+        return me(currentUser(login));
     }
 
     @PostMapping("/api/auth/password-reset")
@@ -104,13 +108,18 @@ class AuthController {
     @PostMapping("/api/me/onboarding")
     MeResponse onboarding(@AuthenticationPrincipal LoginUser login,
             @Valid @RequestBody AuthRequests.Onboarding request) {
-        return MeResponse.from(auth.completeOnboarding(login.id(), request.handle(), request.displayName()));
+        return me(auth.completeOnboarding(login.id(), request.handle(), request.displayName()));
     }
 
     @GetMapping("/api/handles/{handle}/availability")
     AvailabilityResponse availability(@PathVariable String handle) {
         String problem = auth.handleProblem(handle);
         return new AvailabilityResponse(problem == null, problem == null ? "使えます" : problem);
+    }
+
+    /** ログイン中のユーザーの JSON(未読の通知の数も入れる) */
+    private MeResponse me(User user) {
+        return MeResponse.from(user, notifications.unreadCount(user.getId()));
     }
 
     private User currentUser(LoginUser login) {

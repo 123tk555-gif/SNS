@@ -19,7 +19,7 @@ export default function PostDetailPage() {
   const [post, setPost] = useState(null)
   const [parent, setParent] = useState(null)
   const [error, setError] = useState(null) // { notFound: true } か { message }
-  const replies = useTimeline(`/api/posts/${id}/replies`, { cursorParam: 'after' })
+  const replies = useTimeline(`/api/posts/${id}/replies`, { cursorParam: 'after', posts: true })
 
   const load = useCallback(async () => {
     setError(null)
