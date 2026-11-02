@@ -17,6 +17,12 @@
       "Action": "s3:ListBucket",
       "Resource": "arn:aws:s3:::BUCKET_NAME",
       "Condition": { "StringLike": { "s3:prefix": ["uploads/*", "backups/*", "logs/*", "backups/", "logs/"] } }
+    },
+    {
+      "Sid": "ReadOwnSettings",
+      "Effect": "Allow",
+      "Action": "ssm:GetParameter",
+      "Resource": "arn:aws:ssm:REGION:ACCOUNT_ID:parameter/sns/*"
     }
   ]
 }

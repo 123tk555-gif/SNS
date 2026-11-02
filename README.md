@@ -73,10 +73,10 @@ cd e2e; $env:BASE_URL="https://localhost"; $env:MAILPIT_URL="http://127.0.0.1:18
 docker compose --env-file test.env -f compose.prod.yaml -f override.yaml down -v   # 片付け
 ```
 
-### AWS の S3(画像・バックアップ・ログ)
+### AWS への公開と S3(画像・バックアップ・ログ)
 公開時は、ユーザーがアップロードした画像を Amazon S3 に保存し、データベースのバックアップ(毎日・14 日分)とログ(毎日・30 日分)も S3 に送ります。バケットは公開せず、サーバーには IAM ロールで最小限の権限だけを渡します(アクセスキーは作りません)。準備と運用の手順は [deploy/aws/README.md](deploy/aws/README.md) にあります。
 
-AWS への公開(サーバーの作成・起動)の手順は、これからまとめます(要件定義書 8.7)。
+AWS への公開(サーバーの作成・起動・停止)の手順も、同じ [deploy/aws/README.md](deploy/aws/README.md) にあります。サーバーは使うときだけ起動し、公開のアドレスは DuckDNS の無料のアドレス(例: `https://sns-taro.duckdns.org`)です。
 
 ## フォルダ
 

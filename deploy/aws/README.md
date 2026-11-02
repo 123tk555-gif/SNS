@@ -1,94 +1,122 @@
-# AWS で使う S3 の準備と運用(画像・バックアップ・ログ)
+# AWS への公開(EC2 + S3)
 
-公開用のサーバー(EC2)から Amazon S3 を使い、次の 3 つを保存する。
+SNS を AWS(東京リージョン)で公開する手順と、公開したあとの運用。taskboard と同じ AWS アカウント・同じやり方(使うときだけ起動)で動かす。
+
+## 全体の形
+
+| もの | 使うサービス | 料金の目安 |
+|---|---|---|
+| サーバー(アプリ・データベース・HTTPS の入り口) | EC2 t4g.micro(メモリ 1GB)+ ディスク 12GB | 動かしている間だけ 1 時間 約 2 円。止めている間はディスク分の月 約 1.2 ドル |
+| 公開のアドレス | DuckDNS(無料)。例: `https://sns-taro.duckdns.org` | 無料 |
+| HTTPS の証明書 | Let's Encrypt(Caddy が自動で取得・更新) | 無料 |
+| 画像・バックアップ・ログ | S3 | 月 0.1 ドル未満 |
+| 秘密の値(Gmail・DuckDNS・Google ログイン) | Systems Manager のパラメータストア(標準) | 無料 |
+| メール送信 | Gmail(アプリパスワード) | 無料(1 日 500 通まで) |
+| 料金の通知 | AWS Budgets(月 5 ドルを超えそうならメール) | 無料(2 つまで) |
+
+- 2027 年 3 月ごろまでは、AWS の無料プランのクレジットの範囲です
+- サーバーは止めて起動するたびに IP アドレスが変わるが、サーバーが起動するたびに DuckDNS を新しい IP に向け直すので、アドレスは変わらない(Google ログインも使える)
+
+## 安全のための決まり
+- 外から入れるのは 80・443 番だけ。SSH(22 番)は開けない。サーバーの中の作業は、SSM のセッションマネージャーで行う
+- データベースとアプリには、外から直接つながらない(Caddy を通す)
+- アクセスキーを作らない。サーバーの権限は IAM ロール(`sns-ec2-role`)で渡し、できることは最小限にする(`server-policy.json`)
+- 秘密の値は、パラメータストア(暗号化)と、サーバーの `.env`(管理者だけが読める)にしか置かない。git には入れない
+- S3 のバケットは公開しない。データは暗号化する
+- データベースのパスワードは、サーバーの中でランダムに作り、外には出さない
+
+## ファイル
+
+| ファイル | どこで | 内容 |
+|---|---|---|
+| `setup.ps1` | Windows | S3 バケット・IAM ロール・料金の通知を作る(最初に 1 回) |
+| `set-secrets.ps1` | Windows | 秘密の値をパラメータストアに入れる(最初に 1 回。値を変えるときも) |
+| `create-server.ps1` | Windows | サーバー(EC2)とセキュリティグループを作る(最初に 1 回) |
+| `start.ps1` / `stop.ps1` | Windows | サーバーを起動・停止する。`start.ps1 -Update` で GitHub の最新に更新 |
+| `user-data.sh` | サーバー | 最初の起動で 1 回だけ動く準備(Docker・アプリの取得・自動起動の登録) |
+| `boot.sh`・`sns-boot.service` | サーバー | 起動のたびに、設定を読んで `.env` を作り、DuckDNS を更新して、アプリを起動する |
+| `s3-tasks.sh`・`sns-*.timer`・`sns-s3-tasks@.service`・`install-timers.sh` | サーバー | 毎日のバックアップ・ログの転送と、データベースを戻す作業 |
+| `server-policy.json`・`ec2-trust-policy.json`・`lifecycle.json` | — | IAM ロールの権限・S3 の自動削除のルール |
+
+## 公開の手順(最初に 1 回)
+
+### 1. 自分で用意するもの
+1. **DuckDNS**: <https://www.duckdns.org> に GitHub か Google のアカウントでログインし、好きな名前(例: `sns-taro`)を追加する。画面に出る **token** を控える
+2. **Gmail のアプリパスワード**: Google アカウントの「セキュリティ」で 2 段階認証をオンにし、「アプリ パスワード」で 16 文字のパスワードを作る
+3. **Google ログインの戻り先**: Google Cloud の「認証情報」→ 使っている OAuth クライアント →「承認済みのリダイレクト URI」に `https://<DuckDNS の名前>.duckdns.org/login/oauth2/code/google` を足す
+
+### 2. AWS にログインする(Windows の PowerShell)
+```powershell
+aws sso login --profile taskboard
+cd deploy\aws
+```
+
+### 3. S3・IAM ロール・料金の通知を作る
+```powershell
+.\setup.ps1 -BudgetEmail あなたのメールアドレス
+```
+
+### 4. 秘密の値を入れる(画面には表示されない)
+```powershell
+.\set-secrets.ps1
+```
+DuckDNS の名前とトークン、Gmail のアドレスとアプリパスワードを聞かれる。Google ログインの値は、リポジトリの `.env` から読む。
+
+### 5. サーバーを作る(15〜25 分)
+```powershell
+.\create-server.ps1
+```
+最後に `公開しました: https://<名前>.duckdns.org/` と出れば完了。
+
+### 6. 管理者を決める
+公開したアプリで自分のアカウントを登録してから、AWS の画面の「Systems Manager → セッションマネージャー」でサーバーに入り、次を実行する(画面からは管理者にできない。F-ADMIN-06)。
+```bash
+cd /opt/sns
+sudo docker compose -f compose.prod.yaml exec db psql -U sns -d sns -c "update users set role = 'ADMIN' where email = 'あなたのメールアドレス';"
+```
+
+## ふだんの使い方
+```powershell
+aws sso login --profile taskboard
+.\start.ps1           # 起動(1〜2 分で開ける)
+.\stop.ps1            # 使い終わったら止める
+.\start.ps1 -Update   # GitHub の最新に更新して起動(10〜20 分)
+```
+
+## S3(画像・バックアップ・ログ)
 
 | 何を | S3 の場所 | いつ | どのくらい残すか |
 |---|---|---|---|
 | ユーザーがアップロードした画像 | `uploads/` | 投稿・アイコン変更のたびに、アプリが直接保存 | 消すまで(消した・上書きした画像も、古い版として 14 日残る) |
-| データベースのバックアップ | `backups/` | 毎日 3:00(日本時間) | 14 日(+ 古い版として 14 日) |
-| アプリのログ | `logs/` | 毎日 3:30(日本時間) | 30 日 |
+| データベースのバックアップ | `backups/` | 毎日 3:00(日本時間)。止めていたら、次に起動したとき | 14 日(+ 古い版として 14 日) |
+| アプリのログ | `logs/` | 毎日 3:30(日本時間)。止めていたら、次に起動したとき | 30 日 |
 
-古いものは S3 の「ライフサイクルルール」で自動で消えるので、たまり続けず料金も増えない(合計 1GB 未満の見込みで、月 0.1 ドル未満)。
-
-## ファイル
-
-| ファイル | 内容 |
-|---|---|
-| `setup-s3.ps1` | バケットと IAM ロールを作る(Windows から、最初に 1 回) |
-| `s3-policy.json` | IAM ロールに許すこと: このバケットの `uploads/`・`backups/`・`logs/` の読み書きだけ |
-| `ec2-trust-policy.json` | IAM ロールを EC2 に使わせるための設定 |
-| `lifecycle.json` | 自動で消すルール |
-| `s3-tasks.sh` | サーバーで動かす: バックアップ・戻す・一覧・ログの転送 |
-| `sns-backup.timer`・`sns-logs.timer`・`sns-s3-tasks@.service` | 毎日自動で動かすための設定(systemd のタイマー) |
-| `install-timers.sh` | タイマーをサーバーに登録する(サーバーで、最初に 1 回) |
-
-## 安全のための決まり
-- **バケットは公開しない**(パブリックアクセスをすべてブロック)。画像は、アプリ(`/media/…`)を通して、ログイン中の人にだけ渡す
-- **アクセスキーを作らない・どこにも書かない**。サーバーの権限は、EC2 に付けた IAM ロールで渡す(`.env` にもキーは書かない)
-- IAM ロールに許すのは、このバケットの決まった場所の読み書きだけ(最小限の権限)
-- 保存するデータは暗号化する(S3 が管理する鍵。追加の料金なし)
-
-## 手順
-
-### 1. バケットと IAM ロールを作る(Windows で、最初に 1 回)
-前提: AWS CLI を入れ、`aws configure sso --profile sns` でログインの設定をしてあること(taskboard と同じやり方)。
-taskboard で使っているプロファイルをそのまま使うときは `.\setup-s3.ps1 -Profile_ taskboard` とする。
-
-```powershell
-aws sso login --profile sns
-cd deploy\aws
-.\setup-s3.ps1
-```
-
-最後に表示される `STORAGE_TYPE=s3` と `S3_BUCKET=sns-<アカウントID>` を控える。何度動かしても同じ結果になる(すでにあるものは作り直さない)。
-
-### 2. EC2 に IAM ロールを付ける(サーバーを作るとき)
-- サーバー(EC2)を作るときに、IAM インスタンスプロファイル `sns-ec2-profile` を付ける
-- **メタデータの「ホップ数の上限」を 2 にする。** アプリと AWS CLI はコンテナの中で動くので、1(初期値)のままだとコンテナから IAM ロールの権限を受け取れない
-
-```powershell
-aws ec2 modify-instance-metadata-options --instance-id <サーバーのID> `
-  --http-tokens required --http-put-response-hop-limit 2 --profile sns
-```
-
-### 3. サーバーの設定(サーバーの中で、最初に 1 回)
-リポジトリを `/opt/sns` に置き、`.env` に次を足してからアプリを起動する(ほかの値は `.env.example` の「公開用」を見る)。
-
-```
-STORAGE_TYPE=s3
-S3_BUCKET=sns-<アカウントID>
-```
-
+サーバーの中(セッションマネージャー)で:
 ```bash
-cd /opt/sns
-docker compose -f compose.prod.yaml up -d --build
-sudo deploy/aws/install-timers.sh      # 毎日のバックアップとログ転送を登録
+sudo /opt/sns/deploy/aws/s3-tasks.sh backup       # その場でバックアップ
+sudo /opt/sns/deploy/aws/s3-tasks.sh list         # バックアップの一覧
+sudo /opt/sns/deploy/aws/s3-tasks.sh sync-logs    # その場でログを写す
+systemctl list-timers 'sns-*'                     # 次に動く時刻
 ```
 
-### 4. 動いていることを確かめる
+### データベースを戻すとき
 ```bash
-sudo deploy/aws/s3-tasks.sh backup       # その場でバックアップを 1 回とる
-sudo deploy/aws/s3-tasks.sh list         # S3 のバックアップの一覧
-sudo deploy/aws/s3-tasks.sh sync-logs    # その場でログを写す
-systemctl list-timers 'sns-*'            # 次に動く時刻
-journalctl -u 'sns-s3-tasks@*' -n 20     # 前回の結果
+sudo /opt/sns/deploy/aws/s3-tasks.sh restore sns-20261102-180000.dump  # 名前を省くと一番新しいもの
 ```
-画像を付けて投稿し、AWS の画面(S3 → バケット → `uploads/`)にファイルができていることも確かめる。
+戻している間はアプリを止め、終わったら自動で起動し直す。**今のデータベースの中身は、バックアップの時点に置き換わる。** 画像は S3 にそのまま残っている(消した画像は、14 日以内なら S3 の画面の「バージョンを表示」から戻せる)。
 
-## データベースを戻すとき
-```bash
-sudo deploy/aws/s3-tasks.sh list                              # 戻したい日のものを選ぶ
-sudo deploy/aws/s3-tasks.sh restore sns-20261102-180000.dump  # 名前を省くと一番新しいもの
-```
-- 戻している間はアプリを止め、終わったら自動で起動し直す。**今のデータベースの中身は、バックアップの時点に置き換わる**
-- 画像は S3 にそのまま残っている。バックアップのあとに消した画像は、14 日以内なら S3 の画面の「バージョンを表示」から戻せる
+## うまくいかないとき
+- **開けない**: サーバーの中で `sudo systemctl status sns-boot` と `sudo journalctl -u sns-boot -n 50` を見る。最初の作成のときは `sudo tail -n 50 /var/log/cloud-init-output.log`
+- **「パラメータストアに /sns/… がありません」**: `set-secrets.ps1` をもう一度動かす
+- **DuckDNS の更新に失敗**: 名前とトークンを確かめて `set-secrets.ps1` で入れ直し、`start.ps1` で起動し直す
+- **メールが届かない**: アプリのログ(`sudo docker compose -f /opt/sns/compose.prod.yaml logs app`)を見る。Gmail のアプリパスワードを作り直したら `set-secrets.ps1` で入れ直す
+- **Google ログインで「redirect_uri_mismatch」**: 手順 1-3 のリダイレクト URI を確かめる
 
 ## 料金の確認
-- 「請求とコスト管理」で、S3 の料金とクレジットの残りを見る
-- AWS Budgets で、月の上限(例: 5 ドル)を超えたらメールが届くようにしておく
+- 「請求とコスト管理」で、料金とクレジットの残りを見る
+- AWS Budgets のメール(月 5 ドルの 80% を超えた・超えそう)が届いたら、サーバーを止め忘れていないか確かめる
 
 ## 手元で試す(AWS につながずに)
-S3 の代わりに、同じ使い方ができる S3Mock(`adobe/s3mock`)を Docker で動かして試せる。
-アプリの自動テスト `S3StorageApiTest` は、この方法で S3 への保存・配信・削除を確かめている。
+S3 の代わりに、同じ使い方ができる S3Mock(`adobe/s3mock`)を Docker で動かして試せる(アプリの自動テスト `S3StorageApiTest` もこの方法)。
 `s3-tasks.sh` は、環境変数 `AWS_ENDPOINT_URL`(S3Mock の URL)・`AWS_ACCESS_KEY_ID`・`AWS_SECRET_ACCESS_KEY`・`S3_BUCKET` を渡すと、S3Mock に対して動く
 (Windows の Git Bash では `MSYS_NO_PATHCONV=1` も付ける)。

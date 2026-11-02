@@ -34,7 +34,7 @@ services:
       APP_BASE_URL: https://${SITE_ADDRESS:?SITE_ADDRESS を .env に書いてください}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      # 画像の置き場所。AWS では s3(バケットは deploy/aws/setup-s3.ps1 で作る)。書かなければサーバーのボリューム uploads
+      # 画像の置き場所。AWS では s3(バケットは deploy/aws/setup.ps1 で作る)。書かなければサーバーのボリューム uploads
       STORAGE_TYPE: ${STORAGE_TYPE:-local}
       S3_BUCKET: ${S3_BUCKET:-}
       AWS_REGION: ${AWS_REGION:-ap-northeast-1}
@@ -43,6 +43,9 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:?MAIL_FROM を .env に書いてください}
+      # Gmail(smtp.gmail.com:587)などは、ログインと暗号化(STARTTLS)が必要
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-true}
+      MAIL_STARTTLS: ${MAIL_STARTTLS:-true}
     volumes:
       - uploads:/data/uploads
       - logs:/app/logs

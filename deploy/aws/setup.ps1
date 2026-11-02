@@ -1,15 +1,22 @@
-﻿# S3 のバケットと、サーバー(EC2)に付ける IAM ロールを用意する。最初に 1 回だけ動かす(何度動かしても同じ結果になる)。
-# 使い方: aws sso login --profile sns のあとで  .\setup-s3.ps1
+﻿# 公開の準備のうち、サーバー以外のもの(S3 のバケット・IAM ロール・料金の通知)を用意する。
+# 最初に 1 回だけ動かす(何度動かしても同じ結果になる)。
+# 使い方: aws sso login --profile taskboard のあとで  .\setup.ps1 [-BudgetEmail あなたのメールアドレス]
 #
 # 作るもの:
 #  - S3 バケット sns-<アカウントID>(東京)。公開しない・暗号化・古い版を 14 日残す・
 #    backups/ は 14 日、logs/ は 30 日で自動で消す(lifecycle.json)
 #  - IAM ロール sns-ec2-role と、EC2 に付けるための sns-ec2-profile。
-#    できることは、このバケットの uploads/・backups/・logs/ の読み書き(s3-policy.json)と、
+#    できることは、このバケットの uploads/・backups/・logs/ の読み書き、
+#    パラメータストアの /sns/ の設定を読むこと(server-policy.json)と、
 #    サーバーへの指示(SSM。AmazonSSMManagedInstanceCore)だけ
+#  - パラメータストア /sns/s3-bucket(バケット名。サーバーが起動するときに読む)
+#  - (-BudgetEmail を付けたとき)AWS Budgets: 月の料金が 5 ドルの 80% を超えた・超えそうなときにメールで知らせる
+#    (アカウント全体の料金。taskboard の分も含む)
 param(
-    [string]$Profile_ = 'sns',
-    [string]$Region = 'ap-northeast-1'
+    # taskboard と同じ AWS アカウントを使う
+    [string]$Profile_ = 'taskboard',
+    [string]$Region = 'ap-northeast-1',
+    [string]$BudgetEmail = ''
 )
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
@@ -73,9 +80,14 @@ if (Test-Aws iam get-role --role-name $role) {
 }
 Invoke-Aws iam attach-role-policy --role-name $role `
     --policy-arn 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore' | Out-Null
-$policy = (Get-Content "$here\s3-policy.json" -Raw) -replace 'BUCKET_NAME', $bucket
-Invoke-Aws iam put-role-policy --role-name $role --policy-name 'sns-s3' `
+$policy = (Get-Content "$here\server-policy.json" -Raw) -replace 'BUCKET_NAME', $bucket `
+    -replace 'REGION', $Region -replace 'ACCOUNT_ID', $account
+Invoke-Aws iam put-role-policy --role-name $role --policy-name 'sns-server' `
     --policy-document (Write-TempJson 'policy' $policy) | Out-Null
+# 前の版の名前で入れた権限があれば外す(同じ内容が 2 つにならないように)
+if (Test-Aws iam get-role-policy --role-name $role --policy-name 'sns-s3') {
+    Invoke-Aws iam delete-role-policy --role-name $role --policy-name 'sns-s3' | Out-Null
+}
 
 if (-not (Test-Aws iam get-instance-profile --instance-profile-name $instanceProfile)) {
     Invoke-Aws iam create-instance-profile --instance-profile-name $instanceProfile | Out-Null
@@ -87,8 +99,33 @@ if (-not $attached) {
 }
 Write-Host "ロール $role(EC2 に付ける名前: $instanceProfile)を用意しました"
 
+# ---- サーバーが起動するときに読む設定(秘密の値ではないもの) ----
+Invoke-Aws ssm put-parameter --name '/sns/s3-bucket' --type String --value $bucket --overwrite | Out-Null
+Write-Host "パラメータストアに /sns/s3-bucket を入れました"
+
+# ---- 料金の通知(AWS Budgets。2 つまで無料) ----
+if ($BudgetEmail) {
+    $budgetName = 'monthly-5usd'
+    $exists = (Invoke-Aws budgets describe-budgets --account-id $account).Budgets | Where-Object { $_.BudgetName -eq $budgetName }
+    if ($exists) {
+        Write-Host "料金の通知 $budgetName はすでにあります"
+    } else {
+        $budget = Write-TempJson 'budget' (@{
+                BudgetName = $budgetName; BudgetType = 'COST'; TimeUnit = 'MONTHLY'
+                BudgetLimit = @{ Amount = '5'; Unit = 'USD' }
+            } | ConvertTo-Json -Compress)
+        $subscriber = @{ SubscriptionType = 'EMAIL'; Address = $BudgetEmail }
+        $notifications = Write-TempJson 'budget-notifications' (@(
+                @{ Notification = @{ NotificationType = 'ACTUAL'; ComparisonOperator = 'GREATER_THAN'; Threshold = 80; ThresholdType = 'PERCENTAGE' }; Subscribers = @($subscriber) },
+                @{ Notification = @{ NotificationType = 'FORECASTED'; ComparisonOperator = 'GREATER_THAN'; Threshold = 100; ThresholdType = 'PERCENTAGE' }; Subscribers = @($subscriber) }
+            ) | ConvertTo-Json -Depth 5 -Compress)
+        Invoke-Aws budgets create-budget --account-id $account --budget $budget `
+            --notifications-with-subscribers $notifications | Out-Null
+        Write-Host "料金の通知 $budgetName(月 5 ドル)を作りました。お知らせは $BudgetEmail に届きます"
+    }
+}
+
 Remove-Item (Join-Path ([IO.Path]::GetTempPath()) 'sns-*.json') -ErrorAction SilentlyContinue
 Write-Host ''
-Write-Host '終わりました。公開用のサーバーの .env に、次を書きます:'
-Write-Host "  STORAGE_TYPE=s3"
-Write-Host "  S3_BUCKET=$bucket"
+Write-Host "終わりました。バケット: $bucket"
+Write-Host '次は set-secrets.ps1 で、Gmail・DuckDNS・Google ログインの設定を入れます。'

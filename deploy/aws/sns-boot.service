@@ -1,0 +1,16 @@
+# サーバーが起動するたびに、設定を取得してアプリを起動する(deploy/aws/boot.sh)
+[Unit]
+Description=SNS: 設定を取得してアプリを起動する
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/sns/deploy/aws/boot.sh
+# イメージを作る最初の起動は時間がかかる
+TimeoutStartSec=40min
+
+[Install]
+WantedBy=multi-user.target
