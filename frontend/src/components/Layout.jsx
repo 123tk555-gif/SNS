@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink } from 'react-router'
+import { NavLink, useNavigate } from 'react-router'
 import { useAuth } from '../auth.jsx'
 import Composer from './Composer.jsx'
 import Icon from './Icon.jsx'
@@ -8,16 +8,19 @@ import Modal from './Modal.jsx'
 /**
  * ログイン後の画面の枠(画面仕様定義書 3.1・3.2)。PC は左のメニュー、スマートフォンは下のメニューと右下の「投稿する」。
  * 画面が変わったら、画面の見出しにキーボードの位置を移し、ブラウザのタブの題名を変える。
+ * back: 見出しの左に「前の画面に戻る」ボタンを出す
+ * focusHeading: false にすると見出しに移さない(画面の中の入力欄に移したいとき)
  */
-export default function Layout({ title, sub, actions, children }) {
+export default function Layout({ title, sub, actions, back = false, focusHeading = true, children }) {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const heading = useRef(null)
   const [composing, setComposing] = useState(false)
 
   useEffect(() => {
     document.title = `${title} / SNS`
-    heading.current?.focus()
-  }, [title])
+    if (focusHeading) heading.current?.focus()
+  }, [title, focusHeading])
 
   const items = [
     { to: '/', label: 'ホーム', icon: 'home', end: true },
@@ -57,6 +60,12 @@ export default function Layout({ title, sub, actions, children }) {
         </nav>
         <main id="main" className="main">
           <div className="topbar">
+            {back && (
+              <button className="icon-btn plain" type="button" aria-label="前の画面に戻る"
+                onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}>
+                <Icon name="back" />
+              </button>
+            )}
             <div>
               <h1 tabIndex={-1} ref={heading}>
                 {title}

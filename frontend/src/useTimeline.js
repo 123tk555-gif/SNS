@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
 
 /**
- * タイムラインの読み込み(機能定義書 1.5 のカーソル方式)。
- * 1 回目は新しいものから 20 件、2 回目以降は前の結果の nextCursor より古いものを取る。
+ * 投稿の一覧の読み込み(機能定義書 1.5 のカーソル方式)。
+ * 1 回目は最初の 20 件、2 回目以降は前の結果の nextCursor を cursorParam に渡して続きを取る。
+ * cursorParam: 新しい順の一覧(タイムラインなど)は before、古い順の一覧(返信)は after
  */
-export function useTimeline(url) {
+export function useTimeline(url, { cursorParam = 'before' } = {}) {
   const [posts, setPosts] = useState([])
   const [cursor, setCursor] = useState(null)
   const [hasMore, setHasMore] = useState(true)
@@ -20,7 +21,7 @@ export function useTimeline(url) {
     setError('')
     try {
       const separator = url.includes('?') ? '&' : '?'
-      const page = await api(before ? `${url}${separator}before=${before}` : url)
+      const page = await api(before ? `${url}${separator}${cursorParam}=${before}` : url)
       setPosts((current) => {
         // 同じ投稿が二重に出ないようにする(新しく投稿したものが、続きの読み込みと重なることがある)
         const known = new Set(before ? current.map((p) => p.id) : [])
@@ -34,7 +35,7 @@ export function useTimeline(url) {
       loading.current = false
       setStatus('idle')
     }
-  }, [url])
+  }, [url, cursorParam])
 
   useEffect(() => {
     load(null)
@@ -45,8 +46,9 @@ export function useTimeline(url) {
   }, [hasMore, cursor, load])
 
   const prepend = useCallback((post) => setPosts((current) => [post, ...current.filter((p) => p.id !== post.id)]), [])
+  const append = useCallback((post) => setPosts((current) => [...current.filter((p) => p.id !== post.id), post]), [])
   const replace = useCallback((post) => setPosts((current) => current.map((p) => (p.id === post.id ? post : p))), [])
   const remove = useCallback((id) => setPosts((current) => current.filter((p) => p.id !== id)), [])
 
-  return { posts, status, hasMore, error, loadMore, retry: () => load(null), prepend, replace, remove }
+  return { posts, status, hasMore, error, loadMore, retry: () => load(null), prepend, append, replace, remove }
 }

@@ -13,9 +13,10 @@ export const POST_CREATED = 'sns:post-created'
 
 /**
  * 投稿欄(画面仕様定義書 D-01)。本文・画像(最大 10 枚)・画像ごとの説明を入力して投稿する。
- * id: 入力欄の id を他の投稿欄と分けるための名前(home / dialog)
+ * id: 入力欄の id を他の投稿欄と分けるための名前(home / dialog / reply)
+ * replyTo: 返信先の投稿(返信のときだけ。F-POST-07)
  */
-export default function Composer({ id, onPosted }) {
+export default function Composer({ id, onPosted, replyTo }) {
   const { user } = useAuth()
   const notify = useNotice()
   const [text, setText] = useState('')
@@ -62,6 +63,7 @@ export default function Composer({ id, onPosted }) {
     if (!canSubmit) return
     const form = new FormData()
     form.append('text', text)
+    if (replyTo) form.append('replyToId', replyTo.id)
     for (const image of images) {
       form.append('images', image.file)
       form.append('alts', image.alt)
@@ -74,7 +76,7 @@ export default function Composer({ id, onPosted }) {
       setImages([])
       setError('')
       window.dispatchEvent(new CustomEvent(POST_CREATED, { detail: post }))
-      notify('投稿しました')
+      notify(replyTo ? '返信しました' : '投稿しました')
       onPosted?.(post)
     } catch (e) {
       // 入力した内容は消さずに残す
@@ -88,10 +90,11 @@ export default function Composer({ id, onPosted }) {
     <form className={`composer${id === 'home' ? ' hide-sm' : ''}`} onSubmit={submit} noValidate>
       <Avatar user={user} />
       <div className="grow">
+        {replyTo && <p className="reply-note">@{replyTo.author.handle} さんへの返信</p>}
         <label className="sr-only" htmlFor={`text-${id}`}>
-          投稿の本文
+          {replyTo ? '返信の本文' : '投稿の本文'}
         </label>
-        <textarea id={`text-${id}`} placeholder="いまどうしてる?" value={text}
+        <textarea id={`text-${id}`} placeholder={replyTo ? '返信をポスト' : 'いまどうしてる?'} value={text}
           aria-describedby={`counter-${id}${error ? ` error-${id}` : ''}`}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
@@ -148,7 +151,7 @@ export default function Composer({ id, onPosted }) {
             {left < 0 ? `${-left} 文字オーバー` : `残り ${left} 文字`}
           </span>
           <button className="btn btn-primary" type="submit" disabled={!canSubmit}>
-            {submitting ? '送信中…' : '投稿する'}
+            {submitting ? '送信中…' : replyTo ? '返信する' : '投稿する'}
           </button>
         </div>
       </div>

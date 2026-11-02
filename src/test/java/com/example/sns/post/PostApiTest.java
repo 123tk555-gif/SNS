@@ -226,19 +226,36 @@ class PostApiTest extends ApiTestSupport {
 
     @Test
     void タイムラインのSQLの回数は_投稿の数や画像の数によらず一定_N_plus_1にならない() throws Exception {
-        // 投稿者 20 人が、それぞれ画像付きで投稿する
+        // 投稿者 20 人が、それぞれ画像付きで投稿し、いいね・ブックマーク・返信も付ける
         for (int i = 0; i < 20; i++) {
             createUser("user" + i, Role.USER);
-            loggedInAs("user" + i).multipart("/api/posts",
-                    List.of(TestImages.image("png", 2, 2), TestImages.image("png", 3, 3)), "text", "投稿" + i);
+            Browser user = loggedInAs("user" + i);
+            String body = user.multipart("/api/posts",
+                    List.of(TestImages.image("png", 2, 2), TestImages.image("png", 3, 3)), "text", "投稿" + i)
+                    .andReturn().getResponse().getContentAsString();
+            long id = ((Number) JsonPath.read(body, "$.id")).longValue();
+            taro.put("/api/posts/" + id + "/like", "");
+            taro.put("/api/posts/" + id + "/bookmark", "");
+            user.multipart("/api/posts", List.of(), "text", "返信" + i, "replyToId", Long.toString(id));
         }
         Statistics stats = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
         stats.clear();
         taro.get("/api/timeline")
                 .andExpect(jsonPath("$.items.length()").value(20))
                 .andExpect(jsonPath("$.items[0].images.length()").value(2))
+                .andExpect(jsonPath("$.items[0].likeCount").value(1))
+                .andExpect(jsonPath("$.items[0].likedByMe").value(true))
+                .andExpect(jsonPath("$.items[0].bookmarkedByMe").value(true))
+                .andExpect(jsonPath("$.items[0].replyCount").value(1))
                 .andExpect(jsonPath("$.items[19].author.handle").value("user0"));
-        // ログイン中のユーザーの確認 1 + 投稿(投稿者つき)1 + 画像 1 + 返信の数 1
-        assertThat(stats.getPrepareStatementCount()).isLessThanOrEqualTo(4);
+        // ログイン中のユーザーの確認 1 + 投稿(投稿者つき)1 + 画像 1 + 返信の数 1 + いいね 1 + ブックマーク 1
+        assertThat(stats.getPrepareStatementCount()).isLessThanOrEqualTo(6);
+
+        // 返信の一覧も同じ(返信先の投稿を取る 1 回が増えるだけ)
+        String timeline = taro.get("/api/timeline").andReturn().getResponse().getContentAsString();
+        long first = ((Number) JsonPath.read(timeline, "$.items[0].id")).longValue();
+        stats.clear();
+        taro.get("/api/posts/" + first + "/replies").andExpect(jsonPath("$.items.length()").value(1));
+        assertThat(stats.getPrepareStatementCount()).isLessThanOrEqualTo(8);
     }
 }

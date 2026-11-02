@@ -34,7 +34,7 @@ public class Post {
     @Column(nullable = false, length = 4000)
     private String text;
 
-    /** 返信先の投稿の ID(返信は M4 で作る) */
+    /** 返信先の投稿の ID。返信でなければ null */
     @Column(name = "reply_to_id")
     private Long replyToId;
 
@@ -53,8 +53,13 @@ public class Post {
     }
 
     public Post(User author, String text) {
+        this(author, text, null);
+    }
+
+    public Post(User author, String text, Long replyToId) {
         this.author = author;
         this.text = text;
+        this.replyToId = replyToId;
         this.createdAt = Instant.now();
     }
 

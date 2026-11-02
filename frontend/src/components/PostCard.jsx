@@ -9,11 +9,12 @@ import Modal from './Modal.jsx'
 import RichText from './RichText.jsx'
 
 /**
- * 投稿カード(画面仕様定義書 3.4)。自分の投稿は「…」から編集・削除できる。
- * いいね・ブックマークは M4 で加える。
- * onChange(post): 編集したとき / onDelete(id): 削除したとき
+ * 投稿カード(画面仕様定義書 3.4)。いいね・ブックマーク・返信へのリンクと、自分の投稿は「…」から編集・削除。
+ * onChange(post): いいね・ブックマーク・編集で投稿が変わったとき / onDelete(id): 削除したとき
+ * big: 投稿詳細の主役の投稿(大きめの文字、日時はくわしく)
  */
-export default function PostCard({ post, onChange, onDelete }) {
+export default function PostCard({ post, onChange = () => {}, onDelete, big = false }) {
+  const notify = useNotice()
   const [menuOpen, setMenuOpen] = useState(false)
   const [dialog, setDialog] = useState(null) // 'edit' | 'delete' | { image: 番号 }
   const menuRef = useRef(null)
@@ -42,17 +43,52 @@ export default function PostCard({ post, onChange, onDelete }) {
 
   const shown = post.images.slice(0, 4)
 
+  // いいね(F-REACT-01〜03): 押した瞬間に表示を切り替え、保存に失敗したら元に戻してエラーを出す
+  async function toggleLike() {
+    const liked = !post.likedByMe
+    onChange({ ...post, likedByMe: liked, likeCount: post.likeCount + (liked ? 1 : -1) })
+    try {
+      const result = await api(`/api/posts/${post.id}/like`, { method: liked ? 'PUT' : 'DELETE' })
+      onChange({ ...post, likedByMe: result.liked, likeCount: result.likeCount })
+    } catch {
+      onChange(post)
+      notify(liked ? 'いいねできませんでした' : 'いいねを取り消せませんでした', { error: true })
+    }
+  }
+
+  // ブックマーク(F-REACT-04): いいねと同じ動き
+  async function toggleBookmark() {
+    const bookmarked = !post.bookmarkedByMe
+    onChange({ ...post, bookmarkedByMe: bookmarked })
+    try {
+      await api(`/api/posts/${post.id}/bookmark`, { method: bookmarked ? 'PUT' : 'DELETE' })
+      notify(bookmarked ? 'ブックマークしました' : 'ブックマークを解除しました')
+    } catch {
+      onChange(post)
+      notify(bookmarked ? 'ブックマークできませんでした' : 'ブックマークを解除できませんでした', { error: true })
+    }
+  }
+
   return (
-    <article className="card" aria-label={`${post.author.displayName}さんの投稿`}>
+    <article className={`card${big ? ' big' : ''}`} aria-label={`${post.author.displayName}さんの投稿`}>
       <Avatar user={post.author} />
       <div className="card-body">
+        {post.replyTo && (
+          <p className="reply-to">
+            {post.replyTo.unavailable ? (
+              '削除された投稿への返信'
+            ) : (
+              <Link to={`/posts/${post.replyTo.id}`}>@{post.replyTo.authorHandle} さんへの返信</Link>
+            )}
+          </p>
+        )}
         <div className="meta">
           <Link className="name" to={`/users/${post.author.handle}`}>
             {post.author.displayName}
           </Link>
           <span className="handle">@{post.author.handle}</span>
           <Link className="time" to={`/posts/${post.id}`} title={fullTime(post.createdAt)}>
-            <time dateTime={post.createdAt}>{relativeTime(post.createdAt)}</time>
+            <time dateTime={post.createdAt}>{big ? fullTime(post.createdAt) : relativeTime(post.createdAt)}</time>
           </Link>
           {post.editedAt && <span className="edited">(編集済み)</span>}
         </div>
@@ -79,10 +115,21 @@ export default function PostCard({ post, onChange, onDelete }) {
           </div>
         )}
         <div className="actions">
-          <Link className="act" to={`/posts/${post.id}`} aria-label={`返信 ${post.replyCount}件`}>
+          <Link className="act" to={`/posts/${post.id}?reply`} aria-label={`返信 ${post.replyCount}件。返信する`}>
             <Icon name="reply" size={20} />
             <span aria-hidden="true">返信 {post.replyCount}</span>
           </Link>
+          {/* 押された状態は、色だけでなく形(塗りつぶし)と文字でも示す */}
+          <button className="act like" type="button" aria-pressed={post.likedByMe} onClick={toggleLike}>
+            <Icon name="heart" size={20} filled={post.likedByMe} />
+            <span>
+              {post.likedByMe ? 'いいね済み' : 'いいね'} {post.likeCount}
+            </span>
+          </button>
+          <button className="act bm" type="button" aria-pressed={post.bookmarkedByMe} onClick={toggleBookmark}>
+            <Icon name="bookmark" size={20} filled={post.bookmarkedByMe} />
+            <span>{post.bookmarkedByMe ? 'ブックマーク済み' : 'ブックマーク'}</span>
+          </button>
           {post.mine && (
             <div className="menu-wrap" ref={menuRef}>
               <button className="act" type="button" aria-label="その他の操作" aria-expanded={menuOpen}

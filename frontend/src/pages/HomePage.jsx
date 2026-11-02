@@ -42,9 +42,11 @@ function AllTimeline() {
   const timeline = useTimeline('/api/timeline?tab=all')
   const { prepend } = timeline
 
-  // 自分が投稿したら(ダイアログからの投稿も)、先頭に足す
+  // 自分が投稿したら(ダイアログからの投稿も)、先頭に足す。返信はタイムラインに出さない(F-TL-06)
   useEffect(() => {
-    const onCreated = (e) => prepend(e.detail)
+    const onCreated = (e) => {
+      if (!e.detail.replyTo) prepend(e.detail)
+    }
     window.addEventListener(POST_CREATED, onCreated)
     return () => window.removeEventListener(POST_CREATED, onCreated)
   }, [prepend])

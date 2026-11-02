@@ -58,6 +58,8 @@ public abstract class ApiTestSupport {
 
     @BeforeEach
     void cleanDatabase() {
+        jdbc.update("delete from likes");
+        jdbc.update("delete from bookmarks");
         jdbc.update("delete from post_images");
         jdbc.update("delete from posts");
         jdbc.update("delete from email_tokens");

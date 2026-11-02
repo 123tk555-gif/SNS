@@ -36,22 +36,28 @@ public class PostService {
 
     private final PostRepository posts;
     private final PostImageRepository images;
+    private final LikeRepository likes;
+    private final BookmarkRepository bookmarks;
     private final UserRepository users;
     private final ImageStorage storage;
     private final PostViews views;
 
-    public PostService(PostRepository posts, PostImageRepository images, UserRepository users, ImageStorage storage,
-            PostViews views) {
+    public PostService(PostRepository posts, PostImageRepository images, LikeRepository likes,
+            BookmarkRepository bookmarks, UserRepository users, ImageStorage storage, PostViews views) {
         this.posts = posts;
         this.images = images;
+        this.likes = likes;
+        this.bookmarks = bookmarks;
         this.users = users;
         this.storage = storage;
         this.views = views;
     }
 
-    // ---- 作成(F-POST-01〜03) ----
+    // ---- 作成・返信(F-POST-01〜03, F-POST-07) ----
 
-    public PostResponse create(long authorId, String text, List<MultipartFile> files, List<String> alts) {
+    /** replyToId: 返信先の投稿の ID(返信でなければ null)。返信先が見られない投稿なら 404 */
+    public PostResponse create(long authorId, String text, List<MultipartFile> files, List<String> alts,
+            Long replyToId) {
         String body = normalize(text);
         List<MultipartFile> imageFiles = files == null ? List.of() : files.stream().filter(f -> !f.isEmpty()).toList();
         requireValidText(body, !imageFiles.isEmpty());
@@ -65,7 +71,11 @@ public class PostService {
             }
         }
 
-        Post post = posts.save(new Post(users.getReferenceById(authorId), body));
+        if (replyToId != null && posts.findWithAuthor(replyToId).filter(Post::isVisible).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "返信先の投稿が見つかりません");
+        }
+
+        Post post = posts.save(new Post(users.getReferenceById(authorId), body, replyToId));
 
         // 画像は uploads/posts/年/月/ に保存する。途中で失敗して取り消しになったら、保存したファイルも消す
         String folder = "posts/" + YearMonth.now(ZoneOffset.UTC).toString().replace('-', '/');
@@ -108,9 +118,11 @@ public class PostService {
 
     // ---- 削除(F-POST-06) ----
 
-    /** 行は残して削除済みにし、本文を空にする。画像は行もファイルも消す */
+    /** 行は残して削除済みにし、本文を空にする。画像は行もファイルも消す。いいね・ブックマークも消す */
     public void delete(long id, long viewerId) {
         Post post = findOwnPost(id, viewerId);
+        likes.deleteByPost(post);
+        bookmarks.deleteByPost(post);
         List<PostImage> postImages = images.findByPost(post);
         images.deleteAll(postImages);
         storage.deleteAfterCommit(postImages.stream().map(PostImage::getPath).toList());
@@ -121,16 +133,38 @@ public class PostService {
 
     @Transactional(readOnly = true)
     public Page timeline(long viewerId, Long before, Integer limit) {
+        int size = pageSize(limit);
+        // 1 件多く取り、続きがあるかを確かめる
+        List<Post> found = posts.findTimeline(before == null ? Long.MAX_VALUE : before, PageRequest.of(0, size + 1));
+        return page(found, size, viewerId);
+    }
+
+    // ---- 返信の一覧(F-POST-08) ----
+
+    /** 古い順に最大 limit 件。続きは nextCursor を after に渡して取る。返信先が削除済みでも返信は表示する */
+    @Transactional(readOnly = true)
+    public Page replies(long postId, long viewerId, Long after, Integer limit) {
+        if (!posts.existsById(postId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND);
+        }
+        int size = pageSize(limit);
+        List<Post> found = posts.findReplies(postId, after == null ? 0 : after, PageRequest.of(0, size + 1));
+        return page(found, size, viewerId);
+    }
+
+    private int pageSize(Integer limit) {
         int size = limit == null ? DEFAULT_LIMIT : limit;
         if (size < 1 || size > MAX_LIMIT) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "limit は1〜50で指定してください");
         }
-        // 1 件多く取り、続きがあるかを確かめる
-        List<Post> found = posts.findTimeline(before == null ? Long.MAX_VALUE : before, PageRequest.of(0, size + 1));
+        return size;
+    }
+
+    /** 1 件多く取った結果から、1 ページ分と続きのカーソルを作る */
+    private Page page(List<Post> found, int size, long viewerId) {
         boolean hasMore = found.size() > size;
         List<Post> page = hasMore ? found.subList(0, size) : found;
-        Long nextCursor = hasMore ? page.getLast().getId() : null;
-        return new Page(views.toResponses(page, viewerId), nextCursor);
+        return new Page(views.toResponses(page, viewerId), hasMore ? page.getLast().getId() : null);
     }
 
     private Post findOwnPost(long id, long viewerId) {

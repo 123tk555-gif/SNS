@@ -35,17 +35,26 @@ class PostController {
     }
 
     /**
-     * 投稿の作成。multipart/form-data で text・images(複数)・alts(画像と同じ順番・同じ数)を送る。
-     * alts は「,」を含んでも分かれないよう、送られたとおりの値をそのまま受け取る。
+     * 投稿・返信の作成。multipart/form-data で text・images(複数)・alts(画像と同じ順番・同じ数)・
+     * replyToId(返信のときだけ)を送る。alts は「,」を含んでも分かれないよう、送られたとおりの値をそのまま受け取る。
      */
     @PostMapping(value = "/api/posts", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     ResponseEntity<PostResponse> create(@AuthenticationPrincipal LoginUser me,
             @RequestParam(defaultValue = "") String text,
+            @RequestParam(required = false) Long replyToId,
             @RequestPart(name = "images", required = false) List<MultipartFile> images,
             HttpServletRequest request) {
         String[] alts = request.getParameterValues("alts");
-        PostResponse created = service.create(me.id(), text, images, alts == null ? List.of() : Arrays.asList(alts));
+        PostResponse created = service.create(me.id(), text, images, alts == null ? List.of() : Arrays.asList(alts),
+                replyToId);
         return ResponseEntity.created(URI.create("/api/posts/" + created.id())).body(created);
+    }
+
+    /** 返信の一覧(古い順)。続きは nextCursor を after に渡す */
+    @GetMapping("/api/posts/{id}/replies")
+    PostService.Page replies(@AuthenticationPrincipal LoginUser me, @PathVariable long id,
+            @RequestParam(required = false) Long after, @RequestParam(required = false) Integer limit) {
+        return service.replies(id, me.id(), after, limit);
     }
 
     @GetMapping("/api/posts/{id}")

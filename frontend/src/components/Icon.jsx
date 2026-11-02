@@ -29,6 +29,8 @@ const PATHS = {
   ),
   shield: <path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z" />,
   reply: <path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5A8 8 0 1 1 21 12z" />,
+  heart: <path d="M12 20s-7-4.5-9-9a4.5 4.5 0 0 1 9-3 4.5 4.5 0 0 1 9 3c-2 4.5-9 9-9 9z" />,
+  back: <path d="M19 12H5M11 5l-7 7 7 7" />,
   more: (
     <>
       <circle cx="5" cy="12" r="1.6" />
@@ -58,10 +60,12 @@ const PATHS = {
   ),
 }
 
-export default function Icon({ name, size = 24, label }) {
+/** filled: 塗りつぶす(いいね済み・ブックマーク済みなど、押された状態を形でも示す) */
+export default function Icon({ name, size = 24, label, filled = false }) {
   const a11y = label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true }
   return (
-    <svg {...a11y} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+    <svg {...a11y} width={size} height={size} viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor" strokeWidth="2"
       strokeLinecap="round" strokeLinejoin="round">
       {PATHS[name]}
     </svg>

@@ -65,6 +65,8 @@ class SeedData implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        jdbc.update("delete from likes");
+        jdbc.update("delete from bookmarks");
         jdbc.update("delete from post_images");
         jdbc.update("delete from posts");
         jdbc.update("delete from email_tokens");
@@ -94,6 +96,27 @@ class SeedData implements ApplicationRunner {
                     values (?, ?, false, now() - make_interval(mins => ?))
                     """, userIds[n % userIds.length], text, n * 45 + 3);
         }
-        log.info("テストデータを入れました(ユーザー {} 人・投稿 {} 件。パスワードはすべて {})", USERS.length, total, PASSWORD);
+        // 新しい 3 件の投稿に返信を付ける(はなこ・けん)
+        jdbc.update("""
+                insert into posts (author_id, text, reply_to_id, hidden, created_at)
+                select u.id, r.text, p.id, false, p.created_at + make_interval(mins => r.minutes)
+                from (select id, created_at from posts where reply_to_id is null order by id desc limit 3) p
+                cross join (values ('hanako', 'いいですね!', 1), ('ken_eng', '参考になります', 2)) as r(handle, text, minutes)
+                join users u on u.handle = r.handle
+                """);
+        // いいね(投稿と人の組み合わせで、およそ 3 分の 1)と、たろうのブックマーク(新しい 3 件)
+        jdbc.update("""
+                insert into likes (user_id, post_id, created_at)
+                select u.id, p.id, now() from users u cross join posts p
+                where p.reply_to_id is null and (p.id + u.id) % 3 = 0
+                """);
+        jdbc.update("""
+                insert into bookmarks (user_id, post_id, created_at)
+                select u.id, p.id, now() from users u
+                cross join (select id from posts where reply_to_id is null order by id desc limit 3) p
+                where u.handle = 'taro_dev'
+                """);
+        log.info("テストデータを入れました(ユーザー {} 人・投稿 {} 件・返信・いいね・ブックマーク。パスワードはすべて {})",
+                USERS.length, total, PASSWORD);
     }
 }
