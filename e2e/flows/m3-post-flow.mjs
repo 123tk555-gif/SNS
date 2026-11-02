@@ -67,6 +67,14 @@ check('#タグ・@ユーザー・URL がリンクになる', (await card.locator
 const img = card.locator('.imgs img');
 const natural = await img.evaluate((el) => new Promise((r) => (el.complete ? r([el.naturalWidth, el.naturalHeight]) : (el.onload = () => r([el.naturalWidth, el.naturalHeight])))));
 check('画像は長辺2048pxに縮小される', natural[0] === 2048 && natural[1] === 1365, natural.join('x'));
+// 送る前に WebP に変換して小さくする(元の PNG は 3000x2000)
+const saved = await img.evaluate(async (el) => {
+  const r = await fetch(el.getAttribute('src'));
+  return { type: r.headers.get('content-type'), size: (await r.arrayBuffer()).byteLength, url: el.getAttribute('src') };
+});
+const originalSize = (await import('node:fs')).statSync(bigPng).size;
+check('画像は WebP に変換して保存される', saved.type === 'image/webp' && saved.url.endsWith('.webp'), saved.type);
+check('WebP にすると元の画像より小さい', saved.size < originalSize, `${Math.round(originalSize / 1024)}KB → ${Math.round(saved.size / 1024)}KB`);
 check('入力欄が空に戻る', (await composer.inputValue()) === '');
 
 // 画像の拡大表示

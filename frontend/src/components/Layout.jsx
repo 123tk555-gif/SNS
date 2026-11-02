@@ -89,7 +89,7 @@ export default function Layout({ title, sub, actions, back = false, focusHeading
                 <Icon name="back" />
               </button>
             )}
-            <div>
+            <div className="titles">
               <h1 tabIndex={-1} ref={heading}>
                 {title}
               </h1>

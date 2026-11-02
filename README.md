@@ -48,7 +48,7 @@ npm run dev
 |---|---|---|
 | サーバー | `./mvnw test` | JUnit。本物の PostgreSQL を Testcontainers で起動して確かめる(Docker が必要)。画像の S3 保存は、S3 の代わりの S3Mock で確かめる。94 件 |
 | 画面のコード | `cd frontend && npm run lint` | oxlint |
-| 画面の操作 | `cd e2e && npm install && npm test` | Playwright で、実際のブラウザ(Edge)を動かす。8 本・173 項目 |
+| 画面の操作 | `cd e2e && npm install && npm test` | Playwright で、実際のブラウザ(Edge)を動かす。9 本・203 項目(公開前の点検 `m10-release-flow` を含む) |
 | 見やすさの点検 | `cd e2e && npm run audit` | 全画面を 375px/1280px・ライト/ダークで開き、横スクロール・名前のない部品・フォーカスの枠などを調べる |
 
 画面の操作テストの前提: データベース・サーバー(8080)・画面(5173)が動いていて、テストデータ(seed)が入っていること。テストの前後に、作ったデータ(投稿・フォロー・通知・`e2e_` で始まるテスト用ユーザー)は消します(`npm run cleanup` だけでも実行できます)。ユーザーはそのまま残ります。
