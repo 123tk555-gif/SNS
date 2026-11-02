@@ -11,6 +11,7 @@ import NotificationsPage from './pages/NotificationsPage.jsx'
 import OnboardingPage from './pages/OnboardingPage.jsx'
 import PostDetailPage from './pages/PostDetailPage.jsx'
 import ProfilePage from './pages/ProfilePage.jsx'
+import SettingsPage from './pages/SettingsPage.jsx'
 import ResetPasswordPage from './pages/ResetPasswordPage.jsx'
 import SearchPage from './pages/SearchPage.jsx'
 import SignupPage from './pages/SignupPage.jsx'
@@ -80,7 +81,7 @@ export default function App() {
         <Route path="/search" element={<RequireAuth><SearchPage /></RequireAuth>} />
         <Route path="/trends" element={<RequireAuth><TrendsPage /></RequireAuth>} />
         <Route path="/tags/:name" element={<RequireAuth><TagPage /></RequireAuth>} />
-        <Route path="/settings" element={<RequireAuth><ComingSoonPage title="設定" milestone="M8" showLogout /></RequireAuth>} />
+        <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
         <Route path="/admin" element={<RequireAuth><ComingSoonPage title="管理者画面" milestone="M9" /></RequireAuth>} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

@@ -5,6 +5,7 @@ import com.example.sns.notification.NotificationService;
 import com.example.sns.post.PostResponse;
 import com.example.sns.post.PostService;
 import com.example.sns.profile.ProfileService;
+import com.example.sns.profile.Relations;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Component;
@@ -32,13 +33,15 @@ class RealtimeDispatcher {
     private final PostService posts;
     private final ProfileService profiles;
     private final NotificationService notifications;
+    private final Relations relations;
 
     RealtimeDispatcher(StreamRegistry registry, PostService posts, ProfileService profiles,
-            NotificationService notifications) {
+            NotificationService notifications, Relations relations) {
         this.registry = registry;
         this.posts = posts;
         this.profiles = profiles;
         this.notifications = notifications;
+        this.relations = relations;
     }
 
     /** 返信以外の投稿ができた → 接続中の全員に(投稿者本人の画面には、投稿の API の結果で足すので送らない) */
@@ -50,7 +53,9 @@ class RealtimeDispatcher {
             return;
         }
         Set<Long> followers = profiles.followerIds(event.authorId());
-        registry.broadcast("post-created", userId -> userId == event.authorId()
+        // 投稿者とブロックの関係にある人と、投稿者をミュートしている人には送らない(機能定義書 1.6 の V-04・V-05)
+        Set<Long> hidden = relations.hiddenFrom(event.authorId());
+        registry.broadcast("post-created", userId -> userId == event.authorId() || hidden.contains(userId)
                 ? null : new PostCreatedPayload(post, followers.contains(userId)));
     }
 

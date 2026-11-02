@@ -13,12 +13,17 @@ interface NotificationRepository extends JpaRepository<Notification, Long> {
 
     /**
      * 一覧に出してよい通知の条件(機能定義書 3.7): 操作した人が利用停止中でなく、
-     * 対象の投稿があれば、それが削除・非表示になっていないこと
+     * 対象の投稿があれば、それが削除・非表示になっていないこと。
+     * あとからブロック・ミュートした人の通知も出さない(F-NOTIF-06)
      */
     String VISIBLE = """
             n.recipient.id = :userId and n.actor.suspended = false
               and (n.postId is null or exists (
                    select 1 from Post p where p.id = n.postId and p.deletedAt is null and p.hidden = false))
+              and not exists (select 1 from Block blk
+                              where (blk.blocker.id = :userId and blk.blocked.id = n.actor.id)
+                                 or (blk.blocker.id = n.actor.id and blk.blocked.id = :userId))
+              and not exists (select 1 from Mute mt where mt.muter.id = :userId and mt.muted.id = n.actor.id)
             """;
 
     /** 通知の一覧(新しい順)。操作した人は同じ SQL で取る */

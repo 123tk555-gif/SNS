@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { api } from '../api.js'
+import BlockDialog from '../components/BlockDialog.jsx'
 import FollowButton from '../components/FollowButton.jsx'
+import Icon from '../components/Icon.jsx'
 import Layout from '../components/Layout.jsx'
 import PostList from '../components/PostList.jsx'
 import RichText from '../components/RichText.jsx'
+import { useNotice } from '../notice.jsx'
+import { relationMessage, setRelation } from '../relations.js'
 import { useTimeline } from '../useTimeline.js'
 
 const COLORS = ['#1d4ed8', '#b4410c', '#047857', '#6d28d9', '#be185d', '#0f766e', '#a21caf', '#9a3412']
@@ -16,7 +20,7 @@ const TABS = [
 
 /**
  * S-07 プロフィール(F-PROF-01, 03, 04, F-FOLLOW-01)。
- * プロフィールの編集は設定画面(M8)、ミュート・ブロックは M8 で加える。
+ * 他人のプロフィールでは「…」からミュート・ブロック(F-BLOCK-01, 02)。プロフィールの編集は設定画面(S-14)。
  */
 export default function ProfilePage() {
   const { handle } = useParams()
@@ -24,6 +28,8 @@ export default function ProfilePage() {
   const tab = TABS.some(([key]) => key === searchParams.get('tab')) ? searchParams.get('tab') : 'posts'
   const [profile, setProfile] = useState(null)
   const [error, setError] = useState(null)
+  const [blocking, setBlocking] = useState(false) // D-04 を開いているか
+  const notify = useNotice()
 
   const load = useCallback(async () => {
     setError(null)
@@ -73,6 +79,16 @@ export default function ProfilePage() {
   const color = COLORS[profile.id % COLORS.length]
   const joined = new Date(profile.joinedAt)
 
+  async function unblock() {
+    try {
+      await setRelation(profile, 'block', false)
+      setProfile((p) => ({ ...p, blockedByMe: false }))
+      notify(relationMessage(profile.handle, 'block', false))
+    } catch (e) {
+      notify(e.message, { error: true })
+    }
+  }
+
   return (
     <Layout title={profile.displayName} sub={`${profile.postCount}件の投稿`} back={!profile.me}>
       <div className="band" style={{ background: profile.headerUrl ? `url("${profile.headerUrl}") center / cover` : `${color}33` }} />
@@ -90,12 +106,17 @@ export default function ProfilePage() {
                 </Link>
               </>
             ) : (
-              <FollowButton user={profile}
-                onChange={(following, followerCount) => setProfile((p) => ({
-                  ...p,
-                  followedByMe: following,
-                  followerCount: followerCount ?? p.followerCount + (following ? 1 : -1),
-                }))} />
+              <>
+                {!profile.blockedByMe && (
+                  <FollowButton user={profile}
+                    onChange={(following, followerCount) => setProfile((p) => ({
+                      ...p,
+                      followedByMe: following,
+                      followerCount: followerCount ?? p.followerCount + (following ? 1 : -1),
+                    }))} />
+                )}
+                <UserMenu profile={profile} onChange={setProfile} onBlock={() => setBlocking(true)} />
+              </>
             )}
           </div>
         </div>
@@ -103,6 +124,7 @@ export default function ProfilePage() {
         <div>
           <span className="handle">@{profile.handle}</span>
           {profile.followsMe && <span className="chip">フォローされています</span>}
+          {profile.mutedByMe && <span className="chip">ミュート中</span>}
         </div>
         {profile.bio && (
           <p className="bio">
@@ -128,21 +150,95 @@ export default function ProfilePage() {
           </p>
         )}
       </section>
-      <nav className="tabs" aria-label="投稿の種類">
-        {TABS.map(([key, label]) => (
-          <Link key={key} className="tab" to={`/users/${profile.handle}?tab=${key}`}
-            aria-current={tab === key ? 'page' : undefined}>
-            {label}
-          </Link>
-        ))}
-      </nav>
-      <AuthorPosts handle={profile.handle} tab={tab} />
+      {profile.blockedByMe ? (
+        <div className="blocked-box">
+          <p>@{profile.handle} さんをブロックしています</p>
+          <button className="btn btn-outline" type="button" onClick={unblock}>
+            ブロックを解除
+          </button>
+        </div>
+      ) : (
+        <>
+          <nav className="tabs" aria-label="投稿の種類">
+            {TABS.map(([key, label]) => (
+              <Link key={key} className="tab" to={`/users/${profile.handle}?tab=${key}`}
+                aria-current={tab === key ? 'page' : undefined}>
+                {label}
+              </Link>
+            ))}
+          </nav>
+          <AuthorPosts handle={profile.handle} tab={tab} />
+        </>
+      )}
+      {blocking && (
+        <BlockDialog user={profile} onClose={() => setBlocking(false)}
+          // ブロックすると、お互いのフォローは外れる
+          onBlocked={() => setProfile((p) => ({ ...p, blockedByMe: true, followedByMe: false, followsMe: false,
+            followerCount: p.followerCount - (p.followedByMe ? 1 : 0) }))} />
+      )}
     </Layout>
   )
 }
 
+/** 他人のプロフィールの「…」メニュー: ミュートする / 解除、ブロックする / 解除 */
+function UserMenu({ profile, onChange, onBlock }) {
+  const notify = useNotice()
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  // メニューの外を押す・Esc キーで閉じる(投稿カードのメニューと同じ)
+  useEffect(() => {
+    if (!open) return undefined
+    const close = (e) => {
+      if (e.type === 'keydown' ? e.key === 'Escape' : !ref.current?.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', close)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('keydown', close)
+    }
+  }, [open])
+
+  async function change(kind, on) {
+    setOpen(false)
+    try {
+      await setRelation(profile, kind, on)
+      onChange((p) => ({ ...p, [kind === 'mute' ? 'mutedByMe' : 'blockedByMe']: on }))
+      notify(relationMessage(profile.handle, kind, on))
+    } catch (e) {
+      notify(e.message, { error: true })
+    }
+  }
+
+  return (
+    <div className="menu-wrap" ref={ref}>
+      <button className="icon-btn plain" type="button" aria-label="その他の操作" aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}>
+        <Icon name="more" />
+      </button>
+      {open && (
+        <div className="menu" role="group" aria-label="ユーザーのメニュー">
+          <button type="button" autoFocus onClick={() => change('mute', !profile.mutedByMe)}>
+            {profile.mutedByMe ? 'ミュートを解除' : 'ミュートする'}
+          </button>
+          {profile.blockedByMe ? (
+            <button type="button" onClick={() => change('block', false)}>
+              ブロックを解除
+            </button>
+          ) : (
+            <button type="button" className="danger" onClick={() => { setOpen(false); onBlock() }}>
+              ブロックする
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AuthorPosts({ handle, tab }) {
-  const list = useTimeline(`/api/users/${encodeURIComponent(handle)}/posts?tab=${tab}`, { posts: true })
+  const list = useTimeline(`/api/users/${encodeURIComponent(handle)}/posts?tab=${tab}`, { posts: true, keepMuted: true })
   return (
     <PostList {...list} emptyText="まだ投稿がありません" onLoadMore={list.loadMore} onRetry={list.retry}
       onChange={list.replace} onDelete={list.remove} />

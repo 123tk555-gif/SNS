@@ -1,5 +1,6 @@
 package com.example.sns.notification;
 
+import com.example.sns.profile.Relations;
 import com.example.sns.realtime.RealtimeEvents;
 import com.example.sns.user.User;
 import com.example.sns.user.UserRepository;
@@ -22,7 +23,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 通知(機能定義書 3.7)。作った通知は、データベースへの保存が確定したあとで受け取る人に SSE で届く。
- * ブロック・ミュートしている人からの通知を止める処理(F-NOTIF-06)は M8 で加える。
  */
 @Service
 @Transactional
@@ -37,19 +37,24 @@ public class NotificationService {
     private final NotificationRepository notifications;
     private final UserRepository users;
     private final ApplicationEventPublisher events;
+    private final Relations relations;
 
     public NotificationService(NotificationRepository notifications, UserRepository users,
-            ApplicationEventPublisher events) {
+            ApplicationEventPublisher events, Relations relations) {
         this.notifications = notifications;
         this.users = users;
         this.events = events;
+        this.relations = relations;
     }
 
     // ---- 作る(F-NOTIF-01, 02) ----
 
-    /** actorId(操作した人)から recipientId(受け取る人)への通知を作る。自分の操作では作らない */
+    /**
+     * actorId(操作した人)から recipientId(受け取る人)への通知を作る。自分の操作では作らない。
+     * ブロックの関係にあるか、受け取る人が操作した人をミュートしていれば作らない(F-NOTIF-06)
+     */
     public void notify(NotificationType type, long actorId, long recipientId, Long postId) {
-        if (actorId == recipientId) {
+        if (actorId == recipientId || relations.silenced(actorId, recipientId)) {
             return;
         }
         // いいね・フォローは、付け直しても増やさない。前の通知を消して作り直し、新しい通知として先頭に出す

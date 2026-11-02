@@ -9,6 +9,7 @@ import com.example.sns.user.User;
 import com.example.sns.user.UserRepository;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import org.springframework.data.domain.PageRequest;
@@ -18,8 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * プロフィールとフォロー(機能定義書 3.2・3.6)。
- * ブロックの関係にある相手への制限は M8 で加える。
+ * プロフィール・フォロー・ブロック・ミュート(機能定義書 3.2・3.6・3.11)。
  */
 @Service
 @Transactional
@@ -27,30 +27,47 @@ public class ProfileService {
 
     static final String USER_NOT_FOUND = "ユーザーが見つかりません";
     static final String CANNOT_FOLLOW_SELF = "自分自身はフォローできません";
+    static final String CANNOT_FOLLOW_BLOCKED = "このユーザーはフォローできません";
+    static final String CANNOT_TARGET_SELF = "自分自身にはできません";
 
     public record FollowResult(boolean following, long followerCount) {
     }
 
     private final UserRepository users;
     private final FollowRepository follows;
+    private final BlockRepository blocks;
+    private final MuteRepository mutes;
+    private final Relations relations;
     private final PostService posts;
     private final NotificationService notifications;
 
-    public ProfileService(UserRepository users, FollowRepository follows, PostService posts,
-            NotificationService notifications) {
+    public ProfileService(UserRepository users, FollowRepository follows, BlockRepository blocks,
+            MuteRepository mutes, Relations relations, PostService posts, NotificationService notifications) {
         this.users = users;
         this.follows = follows;
+        this.blocks = blocks;
+        this.mutes = mutes;
+        this.relations = relations;
         this.posts = posts;
         this.notifications = notifications;
     }
 
-    /** ユーザーIDからユーザーを探す。初期設定前・利用停止中(本人以外が見るとき)は見つからない扱い */
+    /**
+     * ユーザーIDからユーザーを探す。初期設定前・利用停止中(本人以外が見るとき)と、
+     * 見る人をブロックしている人は見つからない扱い(F-BLOCK-02)
+     */
     @Transactional(readOnly = true)
     public User findVisible(String handle, long viewerId) {
+        return findForRelation(handle, viewerId)
+                .filter(user -> user.getId() == viewerId || !relations.blocks(user.getId(), viewerId))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, USER_NOT_FOUND));
+    }
+
+    /** ブロック・ミュートの解除用。相手からもブロックされていても探せる(解除できなくならないように) */
+    private Optional<User> findForRelation(String handle, long viewerId) {
         return users.findByHandleLower(User.normalizeHandle(handle))
                 .filter(User::isOnboarded)
-                .filter(user -> !user.isSuspended() || user.getId() == viewerId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, USER_NOT_FOUND));
+                .filter(user -> !user.isSuspended() || user.getId() == viewerId);
     }
 
     // ---- プロフィール(F-PROF-01, 03) ----
@@ -65,22 +82,33 @@ public class ProfileService {
                 follows.countFollowing(id), follows.countFollowers(id), posts.countByAuthor(id), user.getCreatedAt(),
                 !me && !follows.followedBy(viewerId, List.of(id)).isEmpty(),
                 !me && !follows.following(viewerId, List.of(id)).isEmpty(),
-                false, false, me);
+                !me && relations.blocks(viewerId, id), !me && relations.mutes(viewerId, id), me);
     }
 
+    /** 自分がブロックしている人の投稿は返さない(画面は「ブロックしています」と表示する) */
     @Transactional(readOnly = true)
     public PostService.Page posts(String handle, long viewerId, PostService.AuthorTab tab, Long before,
             Integer limit) {
-        return posts.byAuthor(findVisible(handle, viewerId).getId(), viewerId, tab, before, limit);
+        User user = findVisible(handle, viewerId);
+        if (relations.blocks(viewerId, user.getId())) {
+            return new PostService.Page(List.of(), null);
+        }
+        return posts.byAuthor(user.getId(), viewerId, tab, before, limit);
     }
 
     // ---- フォロー(F-FOLLOW-01, 03) ----
 
-    /** 何度送っても同じ結果。自分自身は 400。新しくフォローしたときだけ、相手に「フォロー」の通知を作る */
+    /**
+     * 何度送っても同じ結果。自分自身は 400、ブロックの関係にある人は 403。
+     * 新しくフォローしたときだけ、相手に「フォロー」の通知を作る
+     */
     public FollowResult follow(long viewerId, String handle) {
         User target = findVisible(handle, viewerId);
         if (target.getId() == viewerId) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, CANNOT_FOLLOW_SELF);
+        }
+        if (relations.blockedEitherWay(viewerId, target.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, CANNOT_FOLLOW_BLOCKED);
         }
         if (follows.insertIfAbsent(viewerId, target.getId()) == 1) {
             notifications.notify(NotificationType.FOLLOW, viewerId, target.getId(), null);
@@ -110,16 +138,17 @@ public class ProfileService {
             return List.of();
         }
         String escaped = HashtagService.escapeLike(word);
-        return summaries(users.search("%" + escaped + "%", escaped + "%", 20), viewerId);
+        return summaries(users.search(viewerId, "%" + escaped + "%", escaped + "%", 20), viewerId);
     }
 
     // ---- フォロー中・フォロワーの一覧(F-FOLLOW-02) ----
 
+    /** 見る人とブロックの関係にある人は、一覧に出さない */
     @Transactional(readOnly = true)
     public UserSummary.Page following(String handle, long viewerId, Long before, Integer limit) {
         User user = findVisible(handle, viewerId);
         int size = pageSize(limit);
-        List<Follow> found = follows.findFollowing(user.getId(), cursor(before), PageRequest.of(0, size + 1));
+        List<Follow> found = follows.findFollowing(viewerId, user.getId(), cursor(before), PageRequest.of(0, size + 1));
         return page(found, size, viewerId, Follow::getFollowee);
     }
 
@@ -127,8 +156,54 @@ public class ProfileService {
     public UserSummary.Page followers(String handle, long viewerId, Long before, Integer limit) {
         User user = findVisible(handle, viewerId);
         int size = pageSize(limit);
-        List<Follow> found = follows.findFollowers(user.getId(), cursor(before), PageRequest.of(0, size + 1));
+        List<Follow> found = follows.findFollowers(viewerId, user.getId(), cursor(before), PageRequest.of(0, size + 1));
         return page(found, size, viewerId, Follow::getFollower);
+    }
+
+    // ---- ブロック・ミュート(F-BLOCK-01〜03) ----
+
+    /** ブロックする。お互いのフォローも解除する(解除したことは通知しない) */
+    public void block(long viewerId, String handle) {
+        User target = findForRelation(handle, viewerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, USER_NOT_FOUND));
+        requireOther(viewerId, target);
+        blocks.insertIfAbsent(viewerId, target.getId());
+        follows.deleteOne(viewerId, target.getId());
+        follows.deleteOne(target.getId(), viewerId);
+    }
+
+    public void unblock(long viewerId, String handle) {
+        findForRelation(handle, viewerId).ifPresent(target -> blocks.deleteOne(viewerId, target.getId()));
+    }
+
+    /** ミュートする。相手には何も知らせない */
+    public void mute(long viewerId, String handle) {
+        User target = findForRelation(handle, viewerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, USER_NOT_FOUND));
+        requireOther(viewerId, target);
+        mutes.insertIfAbsent(viewerId, target.getId());
+    }
+
+    public void unmute(long viewerId, String handle) {
+        findForRelation(handle, viewerId).ifPresent(target -> mutes.deleteOne(viewerId, target.getId()));
+    }
+
+    /** ブロックした人の一覧(ブロックした新しい順) */
+    @Transactional(readOnly = true)
+    public List<UserSummary> blockedUsers(long viewerId) {
+        return summaries(blocks.findByBlocker(viewerId).stream().map(Block::getBlocked).toList(), viewerId);
+    }
+
+    /** ミュートした人の一覧(ミュートした新しい順) */
+    @Transactional(readOnly = true)
+    public List<UserSummary> mutedUsers(long viewerId) {
+        return summaries(mutes.findByMuter(viewerId).stream().map(Mute::getMuted).toList(), viewerId);
+    }
+
+    private static void requireOther(long viewerId, User target) {
+        if (target.getId() == viewerId) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, CANNOT_TARGET_SELF);
+        }
     }
 
     /** 1 件多く取った結果から、1 ページ分と続きのカーソル(フォローの ID)を作る */

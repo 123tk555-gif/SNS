@@ -69,6 +69,8 @@ class SeedData implements ApplicationRunner {
     @Transactional
     public void run(ApplicationArguments args) {
         jdbc.update("delete from notifications");
+        jdbc.update("delete from blocks");
+        jdbc.update("delete from mutes");
         jdbc.update("delete from follows");
         jdbc.update("delete from likes");
         jdbc.update("delete from bookmarks");

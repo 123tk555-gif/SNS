@@ -1,5 +1,6 @@
 package com.example.sns.post;
 
+import com.example.sns.profile.Relations;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -30,14 +31,15 @@ interface BookmarkRepository extends JpaRepository<Bookmark, Long> {
     List<Long> bookmarkedAmong(@Param("viewerId") long viewerId, @Param("postIds") List<Long> postIds);
 
     /**
-     * ブックマークの一覧(F-REACT-05): ブックマークした新しい順。見られなくなった投稿は出さない
+     * ブックマークの一覧(F-REACT-05): ブックマークした新しい順。見られなくなった投稿(ブロック・ミュートを含む)は出さない
      * (ブックマーク自体は残す)。投稿と投稿者は同じ SQL で取る
      */
     @Query("""
             select b from Bookmark b join fetch b.post p join fetch p.author a
-            where b.user.id = :userId and b.id < :before
+            where b.user.id = :viewerId and b.id < :before
               and p.deletedAt is null and p.hidden = false and a.suspended = false
+              and """ + Relations.VISIBLE_TO_VIEWER + """
             order by b.id desc
             """)
-    List<Bookmark> findPage(@Param("userId") long userId, @Param("before") long before, Pageable pageable);
+    List<Bookmark> findPage(@Param("viewerId") long viewerId, @Param("before") long before, Pageable pageable);
 }

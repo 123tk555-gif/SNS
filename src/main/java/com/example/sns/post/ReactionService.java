@@ -2,6 +2,7 @@ package com.example.sns.post;
 
 import com.example.sns.notification.NotificationService;
 import com.example.sns.notification.NotificationType;
+import com.example.sns.profile.Relations;
 import java.util.List;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -11,7 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * いいね・ブックマーク(機能定義書 3.4)。どちらも何度送っても同じ結果になる(すでにいいね済みでも、もう一度 PUT してよい)。
- * ブロックの関係にある相手への制限は M8 で加える。
+ * ブロックの関係にある人の投稿には、いいねできない(403)。ブックマークもできない(投稿自体が見えないので 404)。
  */
 @Service
 @Transactional
@@ -28,14 +29,16 @@ public class ReactionService {
     private final BookmarkRepository bookmarks;
     private final PostViews views;
     private final NotificationService notifications;
+    private final Relations relations;
 
     public ReactionService(PostRepository posts, LikeRepository likes, BookmarkRepository bookmarks, PostViews views,
-            NotificationService notifications) {
+            NotificationService notifications, Relations relations) {
         this.posts = posts;
         this.likes = likes;
         this.bookmarks = bookmarks;
         this.views = views;
         this.notifications = notifications;
+        this.relations = relations;
     }
 
     // ---- いいね(F-REACT-01〜03) ----
@@ -43,6 +46,9 @@ public class ReactionService {
     /** 新しくいいねしたときだけ、投稿者に「いいね」の通知を作る(F-NOTIF-01) */
     public LikeResult like(long userId, long postId) {
         Post post = visiblePost(postId);
+        if (relations.blockedEitherWay(userId, post.getAuthor().getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, PostService.CANNOT_INTERACT);
+        }
         if (likes.insertIfAbsent(userId, postId) == 1) {
             notifications.notify(NotificationType.LIKE, userId, post.getAuthor().getId(), postId);
         }
@@ -58,7 +64,10 @@ public class ReactionService {
     // ---- ブックマーク(F-REACT-04, 05) ----
 
     public BookmarkResult bookmark(long userId, long postId) {
-        visiblePost(postId);
+        Post post = visiblePost(postId);
+        if (relations.blockedEitherWay(userId, post.getAuthor().getId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, PostService.NOT_FOUND);
+        }
         bookmarks.insertIfAbsent(userId, postId);
         return new BookmarkResult(true);
     }

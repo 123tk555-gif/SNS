@@ -29,21 +29,28 @@ interface FollowRepository extends JpaRepository<Follow, Long> {
     @Query("select count(f) from Follow f where f.followee.id = :userId and f.follower.suspended = false")
     long countFollowers(@Param("userId") long userId);
 
-    /** その人がフォローしている人の一覧(フォローした新しい順)。相手のユーザーは同じ SQL で取る */
+    /**
+     * その人がフォローしている人の一覧(フォローした新しい順)。相手のユーザー(a)は同じ SQL で取る。
+     * 見る人(viewerId)とブロックの関係にある人は出さない
+     */
     @Query("""
-            select f from Follow f join fetch f.followee u
-            where f.follower.id = :userId and u.suspended = false and f.id < :before
+            select f from Follow f join fetch f.followee a
+            where f.follower.id = :userId and a.suspended = false and f.id < :before
+              and """ + Relations.NOT_BLOCKED + """
             order by f.id desc
             """)
-    List<Follow> findFollowing(@Param("userId") long userId, @Param("before") long before, Pageable pageable);
+    List<Follow> findFollowing(@Param("viewerId") long viewerId, @Param("userId") long userId,
+            @Param("before") long before, Pageable pageable);
 
-    /** その人のフォロワーの一覧(フォローされた新しい順)。相手のユーザーは同じ SQL で取る */
+    /** その人のフォロワーの一覧(フォローされた新しい順)。見る人とブロックの関係にある人は出さない */
     @Query("""
-            select f from Follow f join fetch f.follower u
-            where f.followee.id = :userId and u.suspended = false and f.id < :before
+            select f from Follow f join fetch f.follower a
+            where f.followee.id = :userId and a.suspended = false and f.id < :before
+              and """ + Relations.NOT_BLOCKED + """
             order by f.id desc
             """)
-    List<Follow> findFollowers(@Param("userId") long userId, @Param("before") long before, Pageable pageable);
+    List<Follow> findFollowers(@Param("viewerId") long viewerId, @Param("userId") long userId,
+            @Param("before") long before, Pageable pageable);
 
     /** その人をフォローしている人の ID */
     @Query("select f.follower.id from Follow f where f.followee.id = :userId")

@@ -2,21 +2,24 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { api } from '../api.js'
 import { useNotice } from '../notice.jsx'
+import { relationMessage, setRelation } from '../relations.js'
 import { fullTime, relativeTime } from '../time.js'
 import Avatar from './Avatar.jsx'
+import BlockDialog from './BlockDialog.jsx'
 import Icon from './Icon.jsx'
 import Modal from './Modal.jsx'
 import RichText from './RichText.jsx'
 
 /**
- * 投稿カード(画面仕様定義書 3.4)。いいね・ブックマーク・返信へのリンクと、自分の投稿は「…」から編集・削除。
+ * 投稿カード(画面仕様定義書 3.4)。いいね・ブックマーク・返信へのリンクと、「…」のメニュー
+ * (自分の投稿は編集・削除、他人の投稿は投稿者のミュート・ブロック)。
  * onChange(post): いいね・ブックマーク・編集で投稿が変わったとき / onDelete(id): 削除したとき
  * big: 投稿詳細の主役の投稿(大きめの文字、日時はくわしく)
  */
 export default function PostCard({ post, onChange = () => {}, onDelete, big = false }) {
   const notify = useNotice()
   const [menuOpen, setMenuOpen] = useState(false)
-  const [dialog, setDialog] = useState(null) // 'edit' | 'delete' | { image: 番号 }
+  const [dialog, setDialog] = useState(null) // 'edit' | 'delete' | 'block' | { image: 番号 }
   const menuRef = useRef(null)
 
   // メニューの外を押す・Esc キーで、メニューを閉じる
@@ -66,6 +69,17 @@ export default function PostCard({ post, onChange = () => {}, onDelete, big = fa
     } catch {
       onChange(post)
       notify(bookmarked ? 'ブックマークできませんでした' : 'ブックマークを解除できませんでした', { error: true })
+    }
+  }
+
+  // ミュート(F-BLOCK-01): 開いている一覧からは、その人の投稿が消える(relations.js の知らせ)
+  async function mute() {
+    setMenuOpen(false)
+    try {
+      await setRelation(post.author, 'mute', true)
+      notify(relationMessage(post.author.handle, 'mute', true))
+    } catch (e) {
+      notify(e.message, { error: true })
     }
   }
 
@@ -132,28 +146,43 @@ export default function PostCard({ post, onChange = () => {}, onDelete, big = fa
             <Icon name="bookmark" size={20} filled={post.bookmarkedByMe} />
             <span>{post.bookmarkedByMe ? 'ブックマーク済み' : 'ブックマーク'}</span>
           </button>
-          {post.mine && (
-            <div className="menu-wrap" ref={menuRef}>
-              <button className="act" type="button" aria-label="その他の操作" aria-expanded={menuOpen}
-                onClick={() => setMenuOpen((open) => !open)}>
-                <Icon name="more" size={20} />
-              </button>
-              {menuOpen && (
-                <div className="menu" role="group" aria-label="投稿のメニュー">
-                  <button type="button" autoFocus onClick={() => { setMenuOpen(false); setDialog('edit') }}>
-                    編集
-                  </button>
-                  <button type="button" className="danger" onClick={() => { setMenuOpen(false); setDialog('delete') }}>
-                    削除
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+          <div className="menu-wrap" ref={menuRef}>
+            <button className="act" type="button" aria-label="その他の操作" aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((open) => !open)}>
+              <Icon name="more" size={20} />
+            </button>
+            {menuOpen && (
+              <div className="menu" role="group" aria-label="投稿のメニュー">
+                {post.mine ? (
+                  <>
+                    <button type="button" autoFocus onClick={() => { setMenuOpen(false); setDialog('edit') }}>
+                      編集
+                    </button>
+                    <button type="button" className="danger" onClick={() => { setMenuOpen(false); setDialog('delete') }}>
+                      削除
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" autoFocus onClick={mute}>
+                      @{post.author.handle} さんをミュート
+                    </button>
+                    <button type="button" className="danger" onClick={() => { setMenuOpen(false); setDialog('block') }}>
+                      @{post.author.handle} さんをブロック
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
       {dialog === 'edit' && <EditDialog post={post} onClose={() => setDialog(null)} onSaved={onChange} />}
       {dialog === 'delete' && <DeleteDialog post={post} onClose={() => setDialog(null)} onDeleted={onDelete} />}
+      {/* ブロックしたら、この投稿は見られなくなるので、削除したときと同じように画面から外す */}
+      {dialog === 'block' && (
+        <BlockDialog user={post.author} onClose={() => setDialog(null)} onBlocked={() => onDelete?.(post.id)} />
+      )}
       {dialog?.image !== undefined && (
         <ImageViewer images={post.images} start={dialog.image} onClose={() => setDialog(null)} />
       )}

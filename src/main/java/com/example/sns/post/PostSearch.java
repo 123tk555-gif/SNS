@@ -2,6 +2,7 @@ package com.example.sns.post;
 
 import com.example.sns.hashtag.HashtagService;
 import com.example.sns.hashtag.Hashtags;
+import com.example.sns.profile.Relations;
 import java.util.List;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -22,12 +23,14 @@ class PostSearch {
         this.jdbc = jdbc;
     }
 
-    List<Long> findIds(List<String> words, long before, int limit) {
+    /** viewerId とブロック・ミュートの関係にある人の投稿は出さない(F-SEARCH-05) */
+    List<Long> findIds(long viewerId, List<String> words, long before, int limit) {
         StringBuilder sql = new StringBuilder("""
                 select p.id from posts p join users u on u.id = p.author_id
                 where p.deleted_at is null and p.hidden = false and u.suspended = false and p.id < :before
-                """);
+                  and """ + Relations.VISIBLE_TO_VIEWER_SQL);
         MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("viewerId", viewerId)
                 .addValue("before", before)
                 .addValue("limit", limit);
         for (int i = 0; i < words.size(); i++) {

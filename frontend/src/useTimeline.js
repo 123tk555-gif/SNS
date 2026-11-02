@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from './api.js'
 import { STREAM_POST_DELETED } from './realtime.jsx'
+import { RELATION_CHANGED } from './relations.js'
 
 /**
  * 一覧の読み込み(機能定義書 1.5 のカーソル方式)。投稿・ユーザー・通知の一覧で使う。
  * 1 回目は最初の 20 件、2 回目以降は前の結果の nextCursor を cursorParam に渡して続きを取る。
  * cursorParam: 新しい順の一覧(タイムラインなど)は before、古い順の一覧(返信)は after
- * posts: true なら投稿の一覧。削除・非表示にされた投稿(SSE の post-deleted)を一覧から消す
+ * posts: true なら投稿の一覧。削除・非表示にされた投稿(SSE の post-deleted)や、ミュート・ブロックした人の投稿を一覧から消す
+ * keepMuted: true ならミュートした人の投稿は残す(その人のプロフィール)
  */
-export function useTimeline(url, { cursorParam = 'before', posts: isPostList = false } = {}) {
+export function useTimeline(url, { cursorParam = 'before', posts: isPostList = false, keepMuted = false } = {}) {
   const [posts, setPosts] = useState([])
   const [cursor, setCursor] = useState(null)
   const [hasMore, setHasMore] = useState(true)
@@ -64,6 +66,18 @@ export function useTimeline(url, { cursorParam = 'before', posts: isPostList = f
     window.addEventListener(STREAM_POST_DELETED, onDeleted)
     return () => window.removeEventListener(STREAM_POST_DELETED, onDeleted)
   }, [isPostList, remove])
+
+  // ミュート・ブロックしたら、その人の投稿を一覧から消す(ミュートを残す一覧は keepMuted: プロフィール)
+  useEffect(() => {
+    if (!isPostList) return undefined
+    const onRelation = (e) => {
+      const { userId, kind, on } = e.detail
+      if (!on || (kind === 'mute' && keepMuted)) return
+      setPosts((current) => current.filter((p) => p.author?.id !== userId))
+    }
+    window.addEventListener(RELATION_CHANGED, onRelation)
+    return () => window.removeEventListener(RELATION_CHANGED, onRelation)
+  }, [isPostList, keepMuted])
 
   return { posts, status, hasMore, error, loadMore, retry: () => load(null), prepend, append, replace, remove }
 }

@@ -3,6 +3,7 @@ package com.example.sns.profile;
 import com.example.sns.post.PostService;
 import com.example.sns.security.LoginUser;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,6 +50,42 @@ class ProfileController {
     @DeleteMapping("/api/users/{handle}/follow")
     ProfileService.FollowResult unfollow(@AuthenticationPrincipal LoginUser me, @PathVariable String handle) {
         return service.unfollow(me.id(), handle);
+    }
+
+    // ---- ブロック・ミュート(機能定義書 3.11) ----
+
+    @PutMapping("/api/users/{handle}/block")
+    ResponseEntity<Void> block(@AuthenticationPrincipal LoginUser me, @PathVariable String handle) {
+        service.block(me.id(), handle);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/api/users/{handle}/block")
+    ResponseEntity<Void> unblock(@AuthenticationPrincipal LoginUser me, @PathVariable String handle) {
+        service.unblock(me.id(), handle);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping("/api/users/{handle}/mute")
+    ResponseEntity<Void> mute(@AuthenticationPrincipal LoginUser me, @PathVariable String handle) {
+        service.mute(me.id(), handle);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/api/users/{handle}/mute")
+    ResponseEntity<Void> unmute(@AuthenticationPrincipal LoginUser me, @PathVariable String handle) {
+        service.unmute(me.id(), handle);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/api/me/blocks")
+    UserSummary.Page blocks(@AuthenticationPrincipal LoginUser me) {
+        return new UserSummary.Page(service.blockedUsers(me.id()), null);
+    }
+
+    @GetMapping("/api/me/mutes")
+    UserSummary.Page mutes(@AuthenticationPrincipal LoginUser me) {
+        return new UserSummary.Page(service.mutedUsers(me.id()), null);
     }
 
     @GetMapping("/api/users/{handle}/following")

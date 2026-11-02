@@ -174,6 +174,25 @@ public class User {
         touch();
     }
 
+    /** プロフィールの編集(F-PROF-02)。自己紹介が空なら未設定にする */
+    public void updateProfile(String displayName, String bio) {
+        this.displayName = displayName;
+        this.bio = bio == null || bio.isBlank() ? null : bio;
+        touch();
+    }
+
+    /** アイコン画像の保存場所(uploads/ からの相対パス)。null なら未設定 */
+    public void setAvatarPath(String avatarPath) {
+        this.avatarPath = avatarPath;
+        touch();
+    }
+
+    /** ヘッダー画像の保存場所(uploads/ からの相対パス)。null なら未設定 */
+    public void setHeaderPath(String headerPath) {
+        this.headerPath = headerPath;
+        touch();
+    }
+
     private void touch() {
         updatedAt = Instant.now();
     }

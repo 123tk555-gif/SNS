@@ -5,6 +5,7 @@ import com.example.sns.hashtag.Hashtags;
 import com.example.sns.media.ImageStorage;
 import com.example.sns.notification.NotificationService;
 import com.example.sns.notification.NotificationType;
+import com.example.sns.profile.Relations;
 import com.example.sns.realtime.RealtimeEvents;
 import com.example.sns.user.UserRepository;
 import java.time.Instant;
@@ -42,6 +43,7 @@ public class PostService {
     static final String TOO_MANY_IMAGES = "画像は10枚までです";
     static final String NOT_FOUND = "投稿が見つかりません";
     static final String NOT_MINE = "自分の投稿だけ編集・削除できます";
+    public static final String CANNOT_INTERACT = "このユーザーの投稿には、返信・いいねができません";
 
     /** タイムラインの 1 ページ。nextCursor が null なら、それ以上はない(機能定義書 1.5) */
     public record Page(List<PostResponse> items, Long nextCursor) {
@@ -58,11 +60,13 @@ public class PostService {
     private final ApplicationEventPublisher events;
     private final HashtagService hashtags;
     private final PostSearch search;
+    private final Relations relations;
 
     public PostService(PostRepository posts, PostImageRepository images, LikeRepository likes,
             BookmarkRepository bookmarks, UserRepository users, ImageStorage storage, PostViews views,
             NotificationService notifications, ApplicationEventPublisher events, HashtagService hashtags,
-            PostSearch search) {
+            PostSearch search, Relations relations) {
+        this.relations = relations;
         this.posts = posts;
         this.images = images;
         this.likes = likes;
@@ -96,6 +100,10 @@ public class PostService {
 
         Post parent = replyToId == null ? null : posts.findWithAuthor(replyToId).filter(Post::isVisible)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "返信先の投稿が見つかりません"));
+        // ブロックの関係にある人の投稿には返信できない(F-BLOCK-02)
+        if (parent != null && relations.blockedEitherWay(authorId, parent.getAuthor().getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, CANNOT_INTERACT);
+        }
 
         Post post = posts.save(new Post(users.getReferenceById(authorId), body, replyToId));
 
@@ -128,10 +136,14 @@ public class PostService {
 
     // ---- 取得(F-POST-08, 09) ----
 
-    /** 投稿 1 件。削除・非表示・投稿者の利用停止のときは「表示できない投稿」として返す(機能定義書 1.6) */
+    /**
+     * 投稿 1 件。削除・非表示・投稿者の利用停止のときは「表示できない投稿」として返し、
+     * 投稿者とブロックの関係にあるときは 404(機能定義書 1.6)。ミュートした人の投稿は、自分で開いたので表示する
+     */
     @Transactional(readOnly = true)
     public PostResponse get(long id, long viewerId) {
         Post post = posts.findWithAuthor(id)
+                .filter(p -> !relations.blockedEitherWay(viewerId, p.getAuthor().getId()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND));
         boolean ownHidden = post.isHidden() && !post.isDeleted() && post.isWrittenBy(viewerId);
         if (!post.isVisible() && !ownHidden) {
@@ -188,7 +200,7 @@ public class PostService {
         PageRequest request = PageRequest.of(0, size + 1);
         List<Post> found = following
                 ? posts.findFollowingTimeline(viewerId, cursor, request)
-                : posts.findTimeline(cursor, request);
+                : posts.findTimeline(viewerId, cursor, request);
         return page(found, size, viewerId);
     }
 
@@ -204,7 +216,7 @@ public class PostService {
         PageRequest request = PageRequest.of(0, CATCH_UP_LIMIT + 1);
         List<Post> found = following
                 ? posts.findFollowingTimelineAfter(viewerId, after, request)
-                : posts.findTimelineAfter(after, request);
+                : posts.findTimelineAfter(viewerId, after, request);
         return page(found, CATCH_UP_LIMIT, viewerId);
     }
 
@@ -229,7 +241,7 @@ public class PostService {
     @Transactional(readOnly = true)
     public Page byAuthor(long authorId, long viewerId, AuthorTab tab, Long before, Integer limit) {
         int size = pageSize(limit);
-        List<Post> found = posts.findByAuthor(authorId, tab != AuthorTab.POSTS, tab == AuthorTab.MEDIA,
+        List<Post> found = posts.findByAuthor(viewerId, authorId, tab != AuthorTab.POSTS, tab == AuthorTab.MEDIA,
                 authorId == viewerId, before == null ? Long.MAX_VALUE : before, PageRequest.of(0, size + 1));
         return page(found, size, viewerId);
     }
@@ -245,7 +257,7 @@ public class PostService {
     @Transactional(readOnly = true)
     public Page byTag(String name, long viewerId, Long before, Integer limit) {
         int size = pageSize(limit);
-        List<Post> found = posts.findByTag(Hashtags.normalize(name.replaceFirst("^[#＃]", "")),
+        List<Post> found = posts.findByTag(viewerId, Hashtags.normalize(name.replaceFirst("^[#＃]", "")),
                 before == null ? Long.MAX_VALUE : before, PageRequest.of(0, size + 1));
         return page(found, size, viewerId);
     }
@@ -253,14 +265,14 @@ public class PostService {
     /** 人気投稿: 直近 24 時間に作られた返信以外の投稿のうち、いいね数の多い順に上位 limit 件 */
     @Transactional(readOnly = true)
     public List<PostResponse> popular(long viewerId, int limit) {
-        return inOrder(posts.findPopularIds(Instant.now().minus(HashtagService.TREND_PERIOD), limit), viewerId);
+        return inOrder(posts.findPopularIds(viewerId, Instant.now().minus(HashtagService.TREND_PERIOD), limit), viewerId);
     }
 
     /** 本文の検索。空白(全角・半角)で区切った言葉を、すべて含む投稿(返信を含む)を新しい順に */
     @Transactional(readOnly = true)
     public Page search(List<String> words, long viewerId, Long before, Integer limit) {
         int size = pageSize(limit);
-        List<Long> ids = search.findIds(words, before == null ? Long.MAX_VALUE : before, size + 1);
+        List<Long> ids = search.findIds(viewerId, words, before == null ? Long.MAX_VALUE : before, size + 1);
         boolean hasMore = ids.size() > size;
         List<Long> pageIds = hasMore ? ids.subList(0, size) : ids;
         return new Page(inOrder(pageIds, viewerId), hasMore ? pageIds.getLast() : null);
@@ -286,7 +298,7 @@ public class PostService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, NOT_FOUND);
         }
         int size = pageSize(limit);
-        List<Post> found = posts.findReplies(postId, after == null ? 0 : after, PageRequest.of(0, size + 1));
+        List<Post> found = posts.findReplies(viewerId, postId, after == null ? 0 : after, PageRequest.of(0, size + 1));
         return page(found, size, viewerId);
     }
 
