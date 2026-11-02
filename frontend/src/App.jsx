@@ -1,8 +1,8 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router'
 import { useAuth } from './auth.jsx'
 import AuthLayout from './components/AuthLayout.jsx'
+import AdminPage from './pages/AdminPage.jsx'
 import BookmarksPage from './pages/BookmarksPage.jsx'
-import ComingSoonPage from './pages/ComingSoonPage.jsx'
 import FollowListPage from './pages/FollowListPage.jsx'
 import HomePage from './pages/HomePage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
@@ -82,7 +82,7 @@ export default function App() {
         <Route path="/trends" element={<RequireAuth><TrendsPage /></RequireAuth>} />
         <Route path="/tags/:name" element={<RequireAuth><TagPage /></RequireAuth>} />
         <Route path="/settings" element={<RequireAuth><SettingsPage /></RequireAuth>} />
-        <Route path="/admin" element={<RequireAuth><ComingSoonPage title="管理者画面" milestone="M9" /></RequireAuth>} />
+        <Route path="/admin" element={<RequireAuth><AdminPage /></RequireAuth>} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </AuthGate>

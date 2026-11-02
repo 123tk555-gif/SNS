@@ -103,6 +103,11 @@ public class Post {
         return replyToId;
     }
 
+    /** 管理者による非表示・解除(F-ADMIN-04) */
+    public void setHidden(boolean hidden) {
+        this.hidden = hidden;
+    }
+
     public boolean isHidden() {
         return hidden;
     }

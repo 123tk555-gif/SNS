@@ -707,7 +707,7 @@ h1[tabindex="-1"]:focus { outline: none; }
   align-items: center;
   font-size: 16px;
 }
-.admin-row.users { grid-template-columns: 56px 130px minmax(0, 1fr) 150px 150px; }
+.admin-row.users { grid-template-columns: 40px 120px minmax(0, 1fr) 104px 128px; }
 .admin-row.head { font-weight: 700; background: var(--surface); }
 .status {
   display: inline-block;
@@ -718,6 +718,7 @@ h1[tabindex="-1"]:focus { outline: none; }
   padding: 0 8px;
 }
 .status.bad { color: var(--danger); }
+.admin-row .small { color: var(--muted); font-size: 14px; }
 .admin-row .btn { min-height: 40px; padding: 0 12px; font-size: 15px; }
 
 /* ---- ログイン・登録 ---- */

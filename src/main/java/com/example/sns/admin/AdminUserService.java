@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -26,8 +27,11 @@ public class AdminUserService {
     private final UserRepository users;
     private final SessionKiller sessionKiller;
     private final StreamRegistry streams;
+    private final JdbcTemplate jdbc;
 
-    public AdminUserService(UserRepository users, SessionKiller sessionKiller, StreamRegistry streams) {
+    public AdminUserService(UserRepository users, SessionKiller sessionKiller, StreamRegistry streams,
+            JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
         this.users = users;
         this.sessionKiller = sessionKiller;
         this.streams = streams;
@@ -36,6 +40,21 @@ public class AdminUserService {
     @Transactional(readOnly = true)
     public Page<User> search(String q, int page) {
         return users.searchForAdmin(q == null ? "" : q.strip(), PageRequest.of(Math.max(page, 0), PAGE_SIZE));
+    }
+
+    /** ユーザーごとの投稿数(削除済みは数えない)。一覧の 1 ページ分を 1 回の問い合わせで数える(N+1 にしない) */
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, Long> postCounts(java.util.List<User> list) {
+        java.util.Map<Long, Long> counts = new java.util.HashMap<>();
+        if (list.isEmpty()) {
+            return counts;
+        }
+        String ids = list.stream().map(u -> Long.toString(u.getId())).collect(java.util.stream.Collectors.joining(","));
+        jdbc.query("select author_id, count(*) c from posts where deleted_at is null and author_id in (" + ids
+                + ") group by author_id", row -> {
+            counts.put(row.getLong("author_id"), row.getLong("c"));
+        });
+        return counts;
     }
 
     /** 利用停止・解除。停止したら、そのユーザーのセッションと SSE の接続をすべて消す(すぐにログアウトされる) */

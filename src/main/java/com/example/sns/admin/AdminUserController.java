@@ -23,11 +23,12 @@ import org.springframework.web.bind.annotation.RestController;
 class AdminUserController {
 
     record AdminUserResponse(long id, String handle, String displayName, String email, Role role, boolean suspended,
+            long postCount,
             Instant createdAt) {
 
-        static AdminUserResponse from(User user) {
+        static AdminUserResponse from(User user, long postCount) {
             return new AdminUserResponse(user.getId(), user.getHandle(), user.getDisplayName(), user.getEmail(),
-                    user.getRole(), user.isSuspended(), user.getCreatedAt());
+                    user.getRole(), user.isSuspended(), postCount, user.getCreatedAt());
         }
     }
 
@@ -46,13 +47,15 @@ class AdminUserController {
     @GetMapping
     AdminUserPage list(@RequestParam(defaultValue = "") String q, @RequestParam(defaultValue = "0") int page) {
         Page<User> result = service.search(q, page);
-        return new AdminUserPage(result.map(AdminUserResponse::from).getContent(), result.getNumber(),
+        java.util.Map<Long, Long> counts = service.postCounts(result.getContent());
+        return new AdminUserPage(result.map(u -> AdminUserResponse.from(u, counts.getOrDefault(u.getId(), 0L))).getContent(), result.getNumber(),
                 result.getTotalPages(), result.getTotalElements());
     }
 
     @PutMapping("/{id}/suspension")
     AdminUserResponse suspend(@AuthenticationPrincipal LoginUser admin, @PathVariable long id,
             @Valid @RequestBody SuspensionRequest request) {
-        return AdminUserResponse.from(service.setSuspended(admin.id(), id, request.suspended()));
+        User user = service.setSuspended(admin.id(), id, request.suspended());
+        return AdminUserResponse.from(user, service.postCounts(List.of(user)).getOrDefault(user.getId(), 0L));
     }
 }

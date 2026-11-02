@@ -137,4 +137,18 @@ interface PostRepository extends JpaRepository<Post, Long> {
             group by p.replyToId
             """)
     List<Object[]> countReplies(@Param("ids") List<Long> ids);
+
+    /**
+     * 管理者の投稿一覧(F-ADMIN-03): 本文の部分一致。非表示の投稿・利用停止中のユーザーの投稿も含め、削除済みは含めない。
+     * pattern は LIKE のパターン(\ で特殊文字を打ち消す)。空のときは全件
+     */
+    @Query(value = """
+            select p from Post p join fetch p.author a
+            where p.deletedAt is null and (:pattern = '' or lower(p.text) like lower(:pattern) escape '\\')
+            order by p.id desc
+            """, countQuery = """
+            select count(p) from Post p
+            where p.deletedAt is null and (:pattern = '' or lower(p.text) like lower(:pattern) escape '\\')
+            """)
+    org.springframework.data.domain.Page<Post> searchForAdmin(@Param("pattern") String pattern, Pageable pageable);
 }
