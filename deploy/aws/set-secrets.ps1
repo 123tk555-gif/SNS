@@ -58,10 +58,17 @@ if ($mail) {
     if ($mail -notmatch '^[^@\s]+@[^@\s]+$') { throw 'メールアドレスの形ではありません' }
     Set-Parameter 'mail-username' $mail
 }
-$appPassword = (Read-Secret 'アプリパスワード 16 文字(画面には表示されません)') -replace '\s', ''
-if ($appPassword) {
-    if ($appPassword.Length -ne 16) { throw 'アプリパスワードは 16 文字です(空白を除いて)' }
-    Set-Parameter 'mail-password' $appPassword
+# 間違えたら、何文字だったか(値ではなく文字数だけ)を出して、もう一度聞く
+for ($try = 1; $try -le 3; $try++) {
+    $appPassword = (Read-Secret 'アプリパスワード 16 文字(画面には表示されません。空白はあってもよい)') -replace '[\s 　]', ''
+    if (-not $appPassword) { break }
+    if ($appPassword -match '^[A-Za-z]{16}$') {
+        Set-Parameter 'mail-password' $appPassword
+        break
+    }
+    $letters = ($appPassword -replace '[^A-Za-z]', '').Length
+    Write-Host "  入力は $($appPassword.Length) 文字(英字は $letters 文字)でした。アプリパスワードは英字 16 文字です。もう一度入力してください"
+    if ($try -eq 3) { Write-Host '  アプリパスワードは入れませんでした(あとで、もう一度 set-secrets.ps1 を実行する)' }
 }
 
 Write-Host ''

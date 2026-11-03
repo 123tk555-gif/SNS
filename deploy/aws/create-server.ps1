@@ -58,7 +58,7 @@ $id = Invoke-Aws ec2 run-instances --image-id $ami --instance-type t4g.micro `
     --iam-instance-profile 'Name=sns-ec2-profile' --security-group-ids $sg `
     --metadata-options 'HttpTokens=required,HttpPutResponseHopLimit=2,HttpEndpoint=enabled' `
     --block-device-mappings 'DeviceName=/dev/xvda,Ebs={VolumeSize=12,VolumeType=gp3,DeleteOnTermination=true,Encrypted=true}' `
-    --user-data "file://$here\user-data.sh" `
+    --user-data "fileb://$here\user-data.sh" `
     --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=sns},{Key=Project,Value=sns}]' `
     'ResourceType=volume,Tags=[{Key=Name,Value=sns},{Key=Project,Value=sns}]' `
     --query 'Instances[0].InstanceId'
