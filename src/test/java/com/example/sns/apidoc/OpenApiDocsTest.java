@@ -145,6 +145,41 @@ class OpenApiDocsTest extends ApiTestSupport {
     }
 
     @Test
+    void エラーの応答はすべてエラーの形で_成功の応答はエラーの形ではない() throws Exception {
+        String json = json();
+        List<String> problems = new ArrayList<>();
+        Map<String, Map<String, Map<String, Object>>> paths = JsonPath.read(json, "$.paths");
+        paths.forEach((path, operations) -> operations.forEach((method, operation) -> {
+            if (!METHODS.contains(method)) {
+                return;
+            }
+            Map<String, Map<String, Object>> responses = (Map<String, Map<String, Object>>) operation.get("responses");
+            responses.forEach((code, response) -> {
+                Map<String, Map<String, Object>> content = (Map<String, Map<String, Object>>) response.get("content");
+                String where = method.toUpperCase() + " " + path + " の " + code;
+                boolean error = code.startsWith("4") || code.startsWith("5");
+                if (error) {
+                    // springdoc は、説明だけ書いたエラー応答に、成功のときの形を入れてしまうことがある(それを防げているか)
+                    if (content == null || content.size() != 1 || !content.containsKey("application/json")
+                            || !String.valueOf(content.get("application/json").get("schema")).contains("#/components/schemas/ApiError")) {
+                        problems.add(where + ": エラーの形(application/json の ApiError)になっていない → " + content);
+                    }
+                } else if (content != null) {
+                    content.forEach((type, media) -> {
+                        if (type.equals("*/*")) {
+                            problems.add(where + ": 返すデータの種類が */* になっている");
+                        }
+                        if (String.valueOf(media.get("schema")).contains("ApiError")) {
+                            problems.add(where + ": 成功の応答が、エラーの形になっている");
+                        }
+                    });
+                }
+            });
+        }));
+        assertThat(problems).as("応答の形が正しくない API").isEmpty();
+    }
+
+    @Test
     void データの形の項目には_すべて日本語の説明がある() throws Exception {
         String json = json();
         List<String> problems = new ArrayList<>();

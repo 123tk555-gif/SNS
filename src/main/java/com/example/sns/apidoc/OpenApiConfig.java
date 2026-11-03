@@ -104,9 +104,10 @@ class OpenApiConfig {
                 if (path.startsWith("/api/admin/")) {
                     add(operation, "404", "管理者以外が呼んだ(存在しない URL と同じ応答)・対象が見つからない", ref);
                 }
-                // コントローラーで説明だけ書いたエラー応答(400・409 など)にも、エラーの JSON の形を付ける
+                // エラー応答(400・409 など)は、いつもエラーの JSON の形にする。
+                // springdoc は、説明だけ書いたエラー応答にも、メソッドの戻り値の形(成功のときの形)を入れてしまうので、上書きする
                 operation.getResponses().forEach((status, response) -> {
-                    if ((status.startsWith("4") || status.startsWith("5")) && response.getContent() == null) {
+                    if (status.startsWith("4") || status.startsWith("5")) {
                         response.setContent(new Content().addMediaType("application/json", new MediaType().schema(ref)));
                     }
                 });

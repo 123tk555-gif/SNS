@@ -77,7 +77,7 @@ paths:
         "200":
           description: 投稿の一覧(ページ番号の方式)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/AdminPostPage"
         "401":
@@ -118,21 +118,21 @@ paths:
         "200":
           description: 変えた。更新後の投稿(管理者向けの形)を返す
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/AdminPost"
         "400":
           description: '`hidden` がない'
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AdminPost"
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: 投稿が見つからない・削除済み(管理者以外が呼んだときも 404)
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AdminPost"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -175,7 +175,7 @@ paths:
         "200":
           description: ユーザーの一覧(ページ番号の方式)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/AdminUserPage"
         "401":
@@ -216,21 +216,21 @@ paths:
         "200":
           description: 変えた。更新後のユーザーを返す
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/AdminUserResponse"
         "400":
           description: '`suspended` がない、または自分自身・管理者を停止しようとした'
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AdminUserResponse"
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: ユーザーが見つからない(管理者以外が呼んだときも 404)
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/AdminUserResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -255,7 +255,7 @@ paths:
         "200":
           description: 画面の設定(Google ログインが使えるか)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ConfigResponse"
       security: []
@@ -277,27 +277,27 @@ paths:
         "200":
           description: ログインした。ユーザーの情報を返す
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/MeResponse"
         "401":
           description: メールアドレスまたはパスワードが違う
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/MeResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: メールアドレスの確認が済んでいない、または利用停止中
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/MeResponse"
+                $ref: "#/components/schemas/ApiError"
         "423":
           description: ログインの失敗が続いたため、15 分間ログインできない
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/MeResponse"
+                $ref: "#/components/schemas/ApiError"
       security: []
   /api/auth/logout:
     post:
@@ -322,7 +322,7 @@ paths:
         "200":
           description: ログイン中のユーザー
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/MeResponse"
         "401":
@@ -425,15 +425,15 @@ paths:
         "200":
           description: 確認できた。ログイン状態になった
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/MeResponse"
         "400":
           description: リンクが正しくない・期限切れ・すでに使われている
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/MeResponse"
+                $ref: "#/components/schemas/ApiError"
       security: []
   /api/auth/verify-email/resend:
     post:
@@ -488,7 +488,7 @@ paths:
         "200":
           description: 投稿の一覧。`nextCursor` が `null` なら、それ以上はない
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PostPage"
         "401":
@@ -516,7 +516,7 @@ paths:
         "200":
           description: 使えるか(`available`)と、画面に出せる文(`message`)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/AvailabilityResponse"
         "401":
@@ -541,21 +541,21 @@ paths:
         "200":
           description: 変えた。更新後のプロフィールを返す
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProfileResponse"
         "400":
           description: 画像でないファイル、または画像を読み込めない
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/ProfileResponse"
+                $ref: "#/components/schemas/ApiError"
         "413":
           description: 画像が 5MB を超える
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/ProfileResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -578,7 +578,7 @@ paths:
         "200":
           description: 消した。更新後のプロフィールを返す
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProfileResponse"
         "401":
@@ -604,7 +604,7 @@ paths:
         "200":
           description: ユーザーの一覧
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserPage"
         "401":
@@ -629,21 +629,21 @@ paths:
         "200":
           description: 変えた。更新後のプロフィールを返す
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProfileResponse"
         "400":
           description: 画像でないファイル、または画像を読み込めない
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/ProfileResponse"
+                $ref: "#/components/schemas/ApiError"
         "413":
           description: 画像が 5MB を超える
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/ProfileResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -666,7 +666,7 @@ paths:
         "200":
           description: 消した。更新後のプロフィールを返す
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProfileResponse"
         "401":
@@ -692,7 +692,7 @@ paths:
         "200":
           description: ユーザーの一覧
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserPage"
         "401":
@@ -720,21 +720,21 @@ paths:
         "200":
           description: 初期設定が済んだ。更新後のユーザーを返す
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/MeResponse"
         "400":
           description: 入力が正しくない(ユーザーIDは半角英数字と `_` の 3〜15 文字、表示名は 1〜50 文字、使えない語)、またはすでに初期設定が済んでいる
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/MeResponse"
+                $ref: "#/components/schemas/ApiError"
         "409":
           description: そのユーザーIDは使われている
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/MeResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -764,15 +764,15 @@ paths:
         "200":
           description: 更新した。更新後のプロフィールを返す
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProfileResponse"
         "400":
           description: 表示名が 1〜50 文字でない、または自己紹介が 160 文字を超える
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/ProfileResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -815,7 +815,7 @@ paths:
         "200":
           description: 通知の一覧。`nextCursor` が `null` なら、それ以上はない
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/NotificationPage"
         "401":
@@ -841,15 +841,15 @@ paths:
         "200":
           description: 既読にした。未読の数(この操作のあと)を返す
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UnreadCount"
         "400":
           description: '`upToId` がない'
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/UnreadCount"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -873,7 +873,7 @@ paths:
         "200":
           description: 未読の数
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UnreadCount"
         "401":
@@ -899,34 +899,34 @@ paths:
         "201":
           description: 作成した。作った投稿を返す(`Location` ヘッダーに、その投稿の URL)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PostResponse"
         "400":
           description: 本文も画像もない・本文が 1000 文字を超える・画像が 10 枚を超える・画像でないファイル・代替テキストが 1000
             文字を超える
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: 返信先の投稿者との間にブロックの関係がある、または初期設定が済んでいない
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostResponse"
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: 返信先の投稿が見つからない(削除・非表示・ブロックで見えないものを含む)
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostResponse"
+                $ref: "#/components/schemas/ApiError"
         "413":
           description: 画像が 5MB を超える
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -954,15 +954,15 @@ paths:
         "200":
           description: "投稿(見られないときは `unavailable: true`)"
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PostResponse"
         "404":
           description: 投稿が存在しない、またはブロックの関係にある人の投稿
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -994,27 +994,27 @@ paths:
         "200":
           description: 編集した。更新後の投稿を返す
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PostResponse"
         "400":
           description: 本文が 1000 文字を超える、または画像のない投稿の本文が空
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostResponse"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: 自分の投稿ではない
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostResponse"
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: 投稿が見つからない
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -1077,15 +1077,15 @@ paths:
         "200":
           description: ブックマーク済みになった
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BookmarkResult"
         "404":
           description: 見られない投稿(ブロックの関係にある人の投稿を含む)
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/BookmarkResult"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -1117,15 +1117,15 @@ paths:
         "200":
           description: ブックマークしていない状態になった
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/BookmarkResult"
         "404":
           description: 見られない投稿
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/BookmarkResult"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -1158,21 +1158,21 @@ paths:
         "200":
           description: いいね済みになった。いいねの数を返す
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LikeResult"
         "403":
           description: 投稿者との間にブロックの関係がある
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/LikeResult"
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: 見られない投稿(存在しない・削除・非表示・投稿者が利用停止中)
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/LikeResult"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -1198,15 +1198,15 @@ paths:
         "200":
           description: いいねしていない状態になった。いいねの数を返す
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/LikeResult"
         "404":
           description: 見られない投稿
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/LikeResult"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -1255,15 +1255,15 @@ paths:
         "200":
           description: 返信の一覧。`nextCursor` が `null` なら、それ以上はない
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PostPage"
         "404":
           description: 元の投稿が見つからない(削除・非表示・ブロックで見えないものを含む)
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostPage"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -1307,15 +1307,15 @@ paths:
         "200":
           description: 投稿の一覧。`nextCursor` が `null` なら、それ以上はない
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PostPage"
         "400":
           description: 検索する言葉が空、または 100 文字を超える
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostPage"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -1343,15 +1343,15 @@ paths:
         "200":
           description: ハッシュタグの一覧
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/TagResults"
         "400":
           description: 検索する言葉が空、または 100 文字を超える
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/TagResults"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -1378,15 +1378,15 @@ paths:
         "200":
           description: ユーザーの一覧
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserResults"
         "400":
           description: 検索する言葉が空、または 100 文字を超える
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/UserResults"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -1462,7 +1462,7 @@ paths:
         "200":
           description: 投稿の一覧。`nextCursor` が `null` なら、それ以上はない(そのタグの投稿がなくても、空の一覧を返す)
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PostPage"
         "401":
@@ -1520,15 +1520,15 @@ paths:
         "200":
           description: 投稿の一覧。`nextCursor` が `null` なら、それ以上はない
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PostPage"
         "400":
           description: '`tab` の値が正しくない'
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostPage"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -1547,7 +1547,7 @@ paths:
         "200":
           description: ハッシュタグと人気投稿
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/Trends"
         "401":
@@ -1575,15 +1575,15 @@ paths:
         "200":
           description: プロフィール
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/ProfileResponse"
         "404":
           description: ユーザーが存在しない、利用停止中、または相手が自分をブロックしている
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/ProfileResponse"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -1686,27 +1686,27 @@ paths:
         "200":
           description: フォロー中になった。相手のフォロワーの数を返す
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/FollowResult"
         "400":
           description: 自分自身はフォローできない
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/FollowResult"
+                $ref: "#/components/schemas/ApiError"
         "403":
           description: 自分が相手をブロックしている(相手が自分をブロックしているときは、相手が見えないので 404)
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/FollowResult"
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: ユーザーが存在しない、利用停止中、または相手が自分をブロックしている
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/FollowResult"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -1731,15 +1731,15 @@ paths:
         "200":
           description: フォローしていない状態になった。相手のフォロワーの数を返す
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/FollowResult"
         "404":
           description: ユーザーが存在しない、または利用停止中
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/FollowResult"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -1788,15 +1788,15 @@ paths:
         "200":
           description: ユーザーの一覧。`nextCursor` が `null` なら、それ以上はない
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserPage"
         "404":
           description: ユーザーが存在しない、利用停止中、または相手が自分をブロックしている
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/UserPage"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -1839,15 +1839,15 @@ paths:
         "200":
           description: ユーザーの一覧。`nextCursor` が `null` なら、それ以上はない
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/UserPage"
         "404":
           description: ユーザーが存在しない、利用停止中、または相手が自分をブロックしている
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/UserPage"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -1979,21 +1979,21 @@ paths:
         "200":
           description: 投稿の一覧。`nextCursor` が `null` なら、それ以上はない
           content:
-            '*/*':
+            application/json:
               schema:
                 $ref: "#/components/schemas/PostPage"
         "400":
           description: '`tab` の値が正しくない'
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostPage"
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: ユーザーが存在しない、利用停止中、または相手が自分をブロックしている
           content:
-            '*/*':
+            application/json:
               schema:
-                $ref: "#/components/schemas/PostPage"
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
@@ -2032,10 +2032,9 @@ paths:
         "404":
           description: 画像が見つからない(保存場所の外を指す URL を含む)
           content:
-            '*/*':
+            application/json:
               schema:
-                type: string
-                format: binary
+                $ref: "#/components/schemas/ApiError"
         "401":
           description: ログインしていない(セッションがない・切れた)
           content:
