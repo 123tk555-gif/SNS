@@ -1,5 +1,6 @@
 package com.example.sns.post;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import com.example.sns.realtime.RealtimeEvents;
 import java.time.Instant;
 import org.slf4j.Logger;
@@ -22,8 +23,16 @@ public class AdminPostService {
     private static final Logger log = LoggerFactory.getLogger(AdminPostService.class);
 
     /** 管理者の画面に出す 1 件分 */
-    public record AdminPost(long id, long authorId, String authorHandle, String text, Instant createdAt, boolean hidden,
-            boolean authorSuspended, boolean reply) {
+    @Schema(description = "管理者の画面に出す、投稿 1 件分")
+    public record AdminPost(
+            @Schema(description = "投稿の ID", example = "1234") long id,
+            @Schema(description = "投稿者のユーザーの ID", example = "7") long authorId,
+            @Schema(description = "投稿者のユーザーID(`@` の後ろ)。初期設定の前は `null`", example = "taro_dev", nullable = true) String authorHandle,
+            @Schema(description = "本文", example = "新しいカフェを見つけました #カフェ巡り") String text,
+            @Schema(description = "投稿した日時(UTC)", example = "2026-11-01T03:15:00Z") Instant createdAt,
+            @Schema(description = "管理者に非表示にされているか", example = "false") boolean hidden,
+            @Schema(description = "投稿者が利用停止中か", example = "false") boolean authorSuspended,
+            @Schema(description = "返信か", example = "false") boolean reply) {
 
         static AdminPost from(Post post) {
             return new AdminPost(post.getId(), post.getAuthor().getId(), post.getAuthor().getHandle(), post.getText(),

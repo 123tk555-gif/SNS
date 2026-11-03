@@ -1,5 +1,6 @@
 package com.example.sns.hashtag;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -15,7 +16,10 @@ public class HashtagService {
     public static final Duration TREND_PERIOD = Duration.ofHours(24);
 
     /** タグ名と、使われた投稿の数 */
-    public record TagCount(String name, long postCount) {
+    @Schema(description = "ハッシュタグと、使われた投稿の数")
+    public record TagCount(
+            @Schema(description = "タグの名前(`#` なし。小文字・全角を半角にそろえた形)", example = "springboot") String name,
+            @Schema(description = "使われた投稿の数(トレンドでは直近 24 時間の数)", example = "12") long postCount) {
     }
 
     private final HashtagRepository hashtags;

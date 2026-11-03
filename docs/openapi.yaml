@@ -1,0 +1,2912 @@
+openapi: 3.1.0
+info:
+  title: SNS タイムラインアプリ API 仕様書
+  description: |
+    SNS タイムラインアプリの API 仕様書です。詳しい仕様(処理の流れ・データの定義・権限)は
+    [機能定義書](https://github.com/123tk555-gif/SNS/blob/main/docs/機能定義書.md)にあります。
+
+    ## 試し方(「Try it out」)
+    1. **アプリでログインする。** この画面と同じアドレスでアプリを開き、ログインしておきます(ログイン状態は Cookie `SESSION` で、ブラウザが自動で付けます)。
+    2. この画面で、試したい API の「Try it out」→「Execute」を押します。
+    3. データを変える API(POST・PUT・DELETE)に必要な CSRF のヘッダー `X-XSRF-TOKEN` は、この画面が Cookie `XSRF-TOKEN` から自動で付けます。
+
+    ## 共通のルール
+    - データは JSON でやり取りします(画像を送るときだけ `multipart/form-data`)。日時は ISO 8601 の UTC です。
+    - **エラー**は、ステータスコードと `{ "message": "画面にそのまま出せる日本語", "errors": [ { "field": "text", "message": "…" } ] }` の形で返します(`errors` は入力チェックのときだけ中身が入ります)。
+    - **一覧の続きの読み込み(カーソル方式)**: 新しい順の一覧は、前の結果の `nextCursor` を `before` に渡して続きを取ります(`nextCursor` が `null` なら、それ以上はありません)。返信のように古い順の一覧は `after` を使います。`limit` は 1〜50、省略すると 20 件です。
+    - **見えない投稿**: 削除・非表示の投稿、利用停止中のユーザーの投稿、ブロックの関係にある人の投稿は、一覧に出ません。ミュートした人の投稿は、一覧から除きます(その人のプロフィールと投稿詳細では見られます)。
+    - ステータスコード: 200 成功 / 201 作成 / 204 成功(本文なし) / 400 入力が正しくない / 401 ログインしていない / 403 権限がない・CSRF の値が違う / 404 見つからない / 409 重複 / 413 大きすぎる / 423 ログインのロック中 / 429 回数が多すぎる
+  version: "1.0"
+servers:
+- url: /
+  description: このサーバー
+security:
+- sessionCookie: []
+tags:
+- name: アカウント
+  description: 登録・ログイン・ログアウト・パスワードの再設定・初期設定。ログイン不要のものと、ログイン中の自分の情報を返すものがある(機能定義書 3.1)
+- name: ユーザー
+  description: プロフィール・フォロー・ブロック・ミュート(機能定義書 3.2、3.6、3.11)
+- name: プロフィール編集
+  description: 自分の表示名・自己紹介・アイコン画像・ヘッダー画像の変更(機能定義書 3.2)
+- name: 投稿・タイムライン
+  description: 投稿・返信の作成、編集、削除、タイムライン(機能定義書 3.3、3.5)
+- name: いいね・ブックマーク
+  description: いいね・ブックマーク(機能定義書 3.4)
+- name: 通知
+  description: 通知の一覧・未読の数・既読(機能定義書 3.7)
+- name: 検索・トレンド
+  description: 投稿・ユーザー・ハッシュタグの検索、トレンド(機能定義書 3.9、3.10)
+- name: リアルタイム配信(SSE)
+  description: "新着の投稿・通知を、再読み込みなしで届ける(Server-Sent Events。機能定義書 3.8)。送られるイベント: `post-created`(新\
+    しい投稿)、`post-deleted`(削除・非表示された投稿の ID)、`notification`(新しい通知と未読の数)。接続の維持のため、30 秒\
+    ごとに中身のない合図(コメント行)も送る"
+- name: 画像
+  description: 投稿・アイコン・ヘッダーの画像の配信。ログイン中の人だけが取れる
+- name: 管理者(ユーザー)
+  description: 管理者だけが使える。管理者以外が呼ぶと、存在しない URL と同じ 404 を返す(機能定義書 3.12)
+- name: 管理者(投稿)
+  description: 管理者だけが使える。管理者以外が呼ぶと、存在しない URL と同じ 404 を返す(機能定義書 3.12)
+paths:
+  /api/admin/posts:
+    get:
+      tags:
+      - 管理者(投稿)
+      summary: 投稿の一覧・検索
+      description: 投稿の本文を、部分一致で探す(`q` を省くと全部。`%` と `_` はふつうの文字として探す)。新しい順に 50 件ずつ。非表示の投稿と、利用停止中のユーザーの投稿も含め、それぞれ印(`hidden`・`authorSuspended`)を付ける。削除済みの投稿は含めない
+      operationId: list
+      parameters:
+      - name: q
+        in: query
+        description: 検索する言葉(本文)。省略すると全部
+        required: false
+        schema:
+          type: string
+          default: ""
+        example: カフェ
+      - name: page
+        in: query
+        description: ページ番号(0 から)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+        example: 0
+      responses:
+        "200":
+          description: 投稿の一覧(ページ番号の方式)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AdminPostPage"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: 管理者以外が呼んだ(存在しない URL と同じ応答)・対象が見つからない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/admin/posts/{id}/visibility:
+    put:
+      tags:
+      - 管理者(投稿)
+      summary: 投稿の非表示・表示に戻す
+      description: 非表示にすると、投稿者以外には見えなくなり、リアルタイム配信(`post-deleted`)で、開いている画面から消える。投稿者本人には、自分のプロフィールの投稿一覧にだけ「管理者により非表示になりました」の印つきで出る。操作は、いつ・誰が・何をしたかをログに残す
+      operationId: visibility
+      parameters:
+      - name: id
+        in: path
+        description: 投稿の ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 1234
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VisibilityRequest"
+        required: true
+      responses:
+        "200":
+          description: 変えた。更新後の投稿(管理者向けの形)を返す
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AdminPost"
+        "400":
+          description: '`hidden` がない'
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AdminPost"
+        "404":
+          description: 投稿が見つからない・削除済み(管理者以外が呼んだときも 404)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AdminPost"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/admin/users:
+    get:
+      tags:
+      - 管理者(ユーザー)
+      summary: ユーザーの一覧・検索
+      description: ユーザーID・表示名・メールアドレスの部分一致で探す(`q` を省くと全員)。登録の新しい順に 50 件ずつ。管理者にするには、データベースで
+        `users.role` を `ADMIN` に変える(画面や API からはできない)
+      operationId: list_1
+      parameters:
+      - name: q
+        in: query
+        description: 検索する言葉(ユーザーID・表示名・メールアドレス)。省略すると全員
+        required: false
+        schema:
+          type: string
+          default: ""
+        example: taro
+      - name: page
+        in: query
+        description: ページ番号(0 から)
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+        example: 0
+      responses:
+        "200":
+          description: ユーザーの一覧(ページ番号の方式)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AdminUserPage"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: 管理者以外が呼んだ(存在しない URL と同じ応答)・対象が見つからない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/admin/users/{id}/suspension:
+    put:
+      tags:
+      - 管理者(ユーザー)
+      summary: ユーザーの利用停止・解除
+      description: 利用停止にすると、そのユーザーのセッションをすべて消し(すぐにログアウトされる)、リアルタイム配信の接続も切る。投稿は、一覧に出なくなる。自分自身と、他の管理者は停止できない。操作は、いつ・誰が・何をしたかをログに残す
+      operationId: suspend
+      parameters:
+      - name: id
+        in: path
+        description: ユーザーの ID(ユーザーID ではなく、数字の ID)
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 7
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SuspensionRequest"
+        required: true
+      responses:
+        "200":
+          description: 変えた。更新後のユーザーを返す
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AdminUserResponse"
+        "400":
+          description: '`suspended` がない、または自分自身・管理者を停止しようとした'
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AdminUserResponse"
+        "404":
+          description: ユーザーが見つからない(管理者以外が呼んだときも 404)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AdminUserResponse"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/auth/config:
+    get:
+      tags:
+      - アカウント
+      summary: 画面の設定の取得
+      description: Google ログインが使えるかを返す。ログイン不要。画面は最初にこれを呼ぶ。このとき、CSRF 対策の Cookie `XSRF-TOKEN`
+        も受け取れる(データを変える API を呼ぶときに、この値をヘッダー `X-XSRF-TOKEN` に入れて送る)
+      operationId: config
+      responses:
+        "200":
+          description: 画面の設定(Google ログインが使えるか)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ConfigResponse"
+      security: []
+  /api/auth/login:
+    post:
+      tags:
+      - アカウント
+      summary: ログイン
+      description: メールアドレスとパスワードでログインし、Cookie `SESSION` を返す(最後の操作から 30 日有効)。失敗のときは、メールアドレスとパスワードのどちらが違うかは教えない。同じメールアドレスで
+        5 回続けて失敗すると、15 分間ロックする
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Login"
+        required: true
+      responses:
+        "200":
+          description: ログインした。ユーザーの情報を返す
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "401":
+          description: メールアドレスまたはパスワードが違う
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "403":
+          description: メールアドレスの確認が済んでいない、または利用停止中
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "423":
+          description: ログインの失敗が続いたため、15 分間ログインできない
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+      security: []
+  /api/auth/logout:
+    post:
+      tags:
+      - アカウント
+      summary: ログアウト
+      description: セッションを消す(リアルタイム配信の接続も切れる)。ログインしていなくても、エラーにはならない
+      operationId: logout
+      responses:
+        "204":
+          description: ログアウトした
+      security: []
+  /api/auth/me:
+    get:
+      tags:
+      - アカウント
+      summary: ログイン中のユーザーの取得
+      description: ログイン中のユーザーの情報と、未読の通知の数を返す。画面は最初にこれを呼び、401 ならログイン画面へ、初期設定前(`onboarded`
+        が `false`)なら初期設定の画面へ移す
+      operationId: me
+      responses:
+        "200":
+          description: ログイン中のユーザー
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/auth/password-reset:
+    post:
+      tags:
+      - アカウント
+      summary: パスワード再設定メールの送信
+      description: 再設定用のリンクをメールで送る(1 時間有効、1 回だけ使える)。登録の有無にかかわらず同じ応答を返す。Google だけで登録した(パスワードを持たない)ユーザーには送らない
+      operationId: requestPasswordReset
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailOnly"
+        required: true
+      responses:
+        "204":
+          description: 受け付けた(送ったかどうかは教えない)
+      security: []
+  /api/auth/password-reset/confirm:
+    post:
+      tags:
+      - アカウント
+      summary: 新しいパスワードの設定
+      description: 再設定メールのリンクの `token` と、新しいパスワード(8〜72 文字)を送る。変えると、そのユーザーの、この操作をした端末以外のセッションをすべて消す
+      operationId: resetPassword
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewPassword"
+        required: true
+      responses:
+        "204":
+          description: パスワードを変えた
+        "400":
+          description: リンクが期限切れか、すでに使われている。またはパスワードが 8〜72 文字でない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security: []
+  /api/auth/signup:
+    post:
+      tags:
+      - アカウント
+      summary: メールアドレスで登録
+      description: メールアドレスとパスワードで、「確認前」のユーザーを作り、確認用のリンクをメールで送る(リンクは 24 時間有効で、1 回だけ使える)。メールアドレスは小文字にして保存し、パスワードは
+        BCrypt で変換して保存する。確認前のまま 24 時間たったユーザーは、同じメールアドレスで登録し直せる
+      operationId: signup
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Signup"
+        required: true
+      responses:
+        "201":
+          description: 登録した。確認メールを送った
+        "400":
+          description: 入力が正しくない(メールアドレスの形・254 文字以内、パスワードは 8〜72 文字)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "409":
+          description: 登録済みのメールアドレス
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: メールを送れなかった(しばらくしてからもう一度)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security: []
+  /api/auth/verify-email:
+    post:
+      tags:
+      - アカウント
+      summary: メールアドレスの確認
+      description: 確認メールのリンクの `token` を送る。正しければ「確認済み」にして、そのままログイン状態にする(Cookie `SESSION`
+        を返す)。ログインしたユーザーの情報を返す。初期設定前は `onboarded` が `false`
+      operationId: verifyEmail
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Token"
+        required: true
+      responses:
+        "200":
+          description: 確認できた。ログイン状態になった
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "400":
+          description: リンクが正しくない・期限切れ・すでに使われている
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+      security: []
+  /api/auth/verify-email/resend:
+    post:
+      tags:
+      - アカウント
+      summary: 確認メールの再送
+      description: 確認前のユーザーに、確認メールをもう一度送る。登録の有無にかかわらず同じ応答を返す(登録済みかどうかを知られないため)。同じメールアドレスへは、1
+        分に 1 回まで
+      operationId: resendVerification
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailOnly"
+        required: true
+      responses:
+        "204":
+          description: 受け付けた(送ったかどうかは教えない)
+        "429":
+          description: 短い間に繰り返した(1 分に 1 回まで)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      security: []
+  /api/bookmarks:
+    get:
+      tags:
+      - いいね・ブックマーク
+      summary: ブックマークの一覧
+      description: 自分のブックマークを、**ブックマークした新しい順**に返す(他人のブックマークを見る API はない)。見えなくなった投稿(削除・非表示・ブロックなど)は、一覧に出さない(ブックマーク自体は残る)。続きは、前の結果の
+        `nextCursor` を `before` に渡して取る
+      operationId: bookmarks
+      parameters:
+      - name: before
+        in: query
+        description: 続きの読み込み。前の結果の `nextCursor`
+        required: false
+        schema:
+          type: integer
+          format: int64
+        example: 1234
+      - name: limit
+        in: query
+        description: 件数(1〜50。省略すると 20)
+        required: false
+        schema:
+          type: integer
+          format: int32
+        example: 20
+      responses:
+        "200":
+          description: 投稿の一覧。`nextCursor` が `null` なら、それ以上はない
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostPage"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/handles/{handle}/availability:
+    get:
+      tags:
+      - アカウント
+      summary: ユーザーIDが使えるかの確認
+      description: 入力中のユーザーIDが使えるか(形・使えない語・重複)を確かめる。画面の初期設定で、入力のたびに呼ぶ
+      operationId: availability
+      parameters:
+      - name: handle
+        in: path
+        description: 確かめるユーザーID(`@` は付けない)
+        required: true
+        schema:
+          type: string
+        example: taro_dev
+      responses:
+        "200":
+          description: 使えるか(`available`)と、画面に出せる文(`message`)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AvailabilityResponse"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/me/avatar:
+    put:
+      tags:
+      - プロフィール編集
+      summary: アイコン画像の変更
+      description: アイコン画像を変える。古い画像ファイルは消す。正方形には切り取らず、画面で丸く表示する
+      operationId: changeAvatar
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ImageForm"
+      responses:
+        "200":
+          description: 変えた。更新後のプロフィールを返す
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "400":
+          description: 画像でないファイル、または画像を読み込めない
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "413":
+          description: 画像が 5MB を超える
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      tags:
+      - プロフィール編集
+      summary: アイコン画像の削除
+      description: アイコン画像を消して、未設定に戻す(画面には、表示名の 1 文字目を色つきの丸で出す)。画像ファイルも消す
+      operationId: removeAvatar
+      responses:
+        "200":
+          description: 消した。更新後のプロフィールを返す
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/me/blocks:
+    get:
+      tags:
+      - ユーザー
+      summary: ブロックしているユーザーの一覧
+      description: ブロックした新しい順に、すべて返す(`nextCursor` はいつも `null`)
+      operationId: blocks
+      responses:
+        "200":
+          description: ユーザーの一覧
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserPage"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/me/header:
+    put:
+      tags:
+      - プロフィール編集
+      summary: ヘッダー画像の変更
+      description: プロフィールの上に出すヘッダー画像を変える。古い画像ファイルは消す
+      operationId: changeHeader
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ImageForm"
+      responses:
+        "200":
+          description: 変えた。更新後のプロフィールを返す
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "400":
+          description: 画像でないファイル、または画像を読み込めない
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "413":
+          description: 画像が 5MB を超える
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      tags:
+      - プロフィール編集
+      summary: ヘッダー画像の削除
+      description: ヘッダー画像を消して、未設定に戻す。画像ファイルも消す
+      operationId: removeHeader
+      responses:
+        "200":
+          description: 消した。更新後のプロフィールを返す
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/me/mutes:
+    get:
+      tags:
+      - ユーザー
+      summary: ミュートしているユーザーの一覧
+      description: ミュートした新しい順に、すべて返す(`nextCursor` はいつも `null`)
+      operationId: mutes
+      responses:
+        "200":
+          description: ユーザーの一覧
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserPage"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/me/onboarding:
+    post:
+      tags:
+      - アカウント
+      summary: 初期設定(ユーザーIDと表示名)
+      description: 登録(または Google ログイン)の直後に、ユーザーIDと表示名を決める。ユーザーIDは、あとから変えられない。`admin`・`root`・`system`
+        など、運営と見分けがつかなくなる語は使えない。初期設定の前は、この API と `GET /api/auth/me` などの、初期設定に必要な API
+        以外は 403
+      operationId: onboarding
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Onboarding"
+        required: true
+      responses:
+        "200":
+          description: 初期設定が済んだ。更新後のユーザーを返す
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "400":
+          description: 入力が正しくない(ユーザーIDは半角英数字と `_` の 3〜15 文字、表示名は 1〜50 文字、使えない語)、またはすでに初期設定が済んでいる
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "409":
+          description: そのユーザーIDは使われている
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/me/profile:
+    put:
+      tags:
+      - プロフィール編集
+      summary: プロフィールの更新(表示名・自己紹介)
+      description: 自分の表示名と自己紹介を変える。変えたあとのプロフィールを返す。ユーザーIDは変えられない
+      operationId: updateProfile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileRequest"
+        required: true
+      responses:
+        "200":
+          description: 更新した。更新後のプロフィールを返す
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "400":
+          description: 表示名が 1〜50 文字でない、または自己紹介が 160 文字を超える
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/notifications:
+    get:
+      tags:
+      - 通知
+      summary: 通知の一覧
+      description: 自分への通知を、新しい順に返す。通知は、いいね(`LIKE`)・返信(`REPLY`)・フォロー(`FOLLOW`)・メンション(`MENTION`)の
+        4 種類。対象の投稿が削除・非表示になった通知、操作した人が利用停止中の通知、ブロック・ミュートの関係にある人の通知は出ない。続きは、前の結果の `nextCursor`
+        を `before` に渡して取る
+      operationId: list_2
+      parameters:
+      - name: before
+        in: query
+        description: 続きの読み込み。前の結果の `nextCursor`
+        required: false
+        schema:
+          type: integer
+          format: int64
+        example: 480
+      - name: limit
+        in: query
+        description: 件数(1〜50。省略すると 20)
+        required: false
+        schema:
+          type: integer
+          format: int32
+        example: 20
+      responses:
+        "200":
+          description: 通知の一覧。`nextCursor` が `null` なら、それ以上はない
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/NotificationPage"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/notifications/read:
+    post:
+      tags:
+      - 通知
+      summary: 通知を既読にする
+      description: '`upToId` 以下の ID の、自分の通知を、すべて既読にする。既読にしたあとの未読の数を返す'
+      operationId: read
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReadRequest"
+        required: true
+      responses:
+        "200":
+          description: 既読にした。未読の数(この操作のあと)を返す
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UnreadCount"
+        "400":
+          description: '`upToId` がない'
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UnreadCount"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/notifications/unread-count:
+    get:
+      tags:
+      - 通知
+      summary: 未読の通知の数
+      description: 未読の通知の数を返す。ログイン直後の値は `GET /api/auth/me` にも含まれる
+      operationId: unreadCount
+      responses:
+        "200":
+          description: 未読の数
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UnreadCount"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/posts:
+    post:
+      tags:
+      - 投稿・タイムライン
+      summary: 投稿・返信の作成
+      description: 本文と画像(最大 10 枚)で投稿を作る。`replyToId` を付けると、その投稿への返信になる(返信はタイムラインには出ない)。本文からハッシュタグ・メンションを取り出して保存し、返信先の投稿者とメンションの相手(最大
+        10 人)に通知を作る。返信でない投稿は、リアルタイム配信(SSE)で、接続中の他のユーザーに届く。画像・投稿・ハッシュタグは、まとめて保存する(どれかが失敗したら全部取り消し、保存した画像も消す)
+      operationId: create
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/PostForm"
+      responses:
+        "201":
+          description: 作成した。作った投稿を返す(`Location` ヘッダーに、その投稿の URL)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostResponse"
+        "400":
+          description: 本文も画像もない・本文が 1000 文字を超える・画像が 10 枚を超える・画像でないファイル・代替テキストが 1000
+            文字を超える
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostResponse"
+        "403":
+          description: 返信先の投稿者との間にブロックの関係がある、または初期設定が済んでいない
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostResponse"
+        "404":
+          description: 返信先の投稿が見つからない(削除・非表示・ブロックで見えないものを含む)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostResponse"
+        "413":
+          description: 画像が 5MB を超える
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostResponse"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/posts/{id}:
+    get:
+      tags:
+      - 投稿・タイムライン
+      summary: 投稿の取得
+      description: 投稿 1 件を返す。削除された・管理者に非表示にされた・投稿者が利用停止中の投稿は、`unavailable` が `true`
+        で、ID 以外が空の形で返す(返信先として「削除されました」と表示するため)。ミュートした人の投稿も、自分で開いたものなので返す
+      operationId: get
+      parameters:
+      - name: id
+        in: path
+        description: 投稿の ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 123
+      responses:
+        "200":
+          description: "投稿(見られないときは `unavailable: true`)"
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostResponse"
+        "404":
+          description: 投稿が存在しない、またはブロックの関係にある人の投稿
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostResponse"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    put:
+      tags:
+      - 投稿・タイムライン
+      summary: 投稿の編集
+      description: 自分の投稿の本文を変える(画像は変えられない)。`editedAt` に今の日時を入れ、ハッシュタグを付け直す。編集で新しく増えたメンションの相手にだけ、通知を作る
+      operationId: edit
+      parameters:
+      - name: id
+        in: path
+        description: 投稿の ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 123
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EditRequest"
+        required: true
+      responses:
+        "200":
+          description: 編集した。更新後の投稿を返す
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostResponse"
+        "400":
+          description: 本文が 1000 文字を超える、または画像のない投稿の本文が空
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostResponse"
+        "403":
+          description: 自分の投稿ではない
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostResponse"
+        "404":
+          description: 投稿が見つからない
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostResponse"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      tags:
+      - 投稿・タイムライン
+      summary: 投稿の削除
+      description: 自分の投稿を削除する。投稿の行は残して「削除済み」にし、本文を空にする(返信先として「この投稿は削除されました」と表示するため)。画像ファイル、その投稿へのいいね・ブックマーク・ハッシュタグの対応・通知は消す。削除したことは、リアルタイム配信(`post-deleted`)で、開いている画面に届く
+      operationId: delete
+      parameters:
+      - name: id
+        in: path
+        description: 投稿の ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 123
+      responses:
+        "204":
+          description: 削除した
+        "403":
+          description: 自分の投稿ではない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: 投稿が見つからない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/posts/{id}/bookmark:
+    put:
+      tags:
+      - いいね・ブックマーク
+      summary: ブックマーク
+      description: 投稿をブックマークする(自分だけに見える)。すでに保存済みでも、エラーにしない(何度送っても同じ結果)
+      operationId: bookmark
+      parameters:
+      - name: id
+        in: path
+        description: 投稿の ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 123
+      responses:
+        "200":
+          description: ブックマーク済みになった
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BookmarkResult"
+        "404":
+          description: 見られない投稿(ブロックの関係にある人の投稿を含む)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BookmarkResult"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      tags:
+      - いいね・ブックマーク
+      summary: ブックマークの解除
+      description: ブックマークを解除する。保存していなくても、エラーにしない(何度送っても同じ結果)
+      operationId: unbookmark
+      parameters:
+      - name: id
+        in: path
+        description: 投稿の ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 123
+      responses:
+        "200":
+          description: ブックマークしていない状態になった
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BookmarkResult"
+        "404":
+          description: 見られない投稿
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BookmarkResult"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/posts/{id}/like:
+    put:
+      tags:
+      - いいね・ブックマーク
+      summary: いいね
+      description: 投稿にいいねする。すでにいいね済みでも、もう一度送ってエラーにしない(何度送っても同じ結果)。投稿者に「いいね」の通知を作る(取り消して付け直しても、通知は増やさない)
+      operationId: like
+      parameters:
+      - name: id
+        in: path
+        description: 投稿の ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 123
+      responses:
+        "200":
+          description: いいね済みになった。いいねの数を返す
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LikeResult"
+        "403":
+          description: 投稿者との間にブロックの関係がある
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LikeResult"
+        "404":
+          description: 見られない投稿(存在しない・削除・非表示・投稿者が利用停止中)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LikeResult"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      tags:
+      - いいね・ブックマーク
+      summary: いいねの取り消し
+      description: いいねを取り消す。いいねしていなくても、エラーにしない(何度送っても同じ結果)
+      operationId: unlike
+      parameters:
+      - name: id
+        in: path
+        description: 投稿の ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 123
+      responses:
+        "200":
+          description: いいねしていない状態になった。いいねの数を返す
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LikeResult"
+        "404":
+          description: 見られない投稿
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/LikeResult"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/posts/{id}/replies:
+    get:
+      tags:
+      - 投稿・タイムライン
+      summary: 返信の一覧
+      description: ある投稿への返信を、古い順(会話の流れの順)に返す。続きは、前の結果の `nextCursor` を `after` に渡して取る。削除・非表示の返信と、ブロック・ミュートの関係にある人の返信は出ない
+      operationId: replies
+      parameters:
+      - name: id
+        in: path
+        description: 元の投稿の ID
+        required: true
+        schema:
+          type: integer
+          format: int64
+        example: 123
+      - name: after
+        in: query
+        description: 続きの読み込み。前の結果の `nextCursor`(この ID より新しい返信を取る)
+        required: false
+        schema:
+          type: integer
+          format: int64
+        example: 130
+      - name: limit
+        in: query
+        description: 件数(1〜50。省略すると 20)
+        required: false
+        schema:
+          type: integer
+          format: int32
+        example: 20
+      responses:
+        "200":
+          description: 返信の一覧。`nextCursor` が `null` なら、それ以上はない
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostPage"
+        "404":
+          description: 元の投稿が見つからない(削除・非表示・ブロックで見えないものを含む)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostPage"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/search/posts:
+    get:
+      tags:
+      - 検索・トレンド
+      summary: 投稿の検索
+      description: 投稿の本文(返信を含む)を、部分一致で探す。空白(全角・半角)で区切ると、すべての言葉を含むものを探す(最初の 10 語まで)。日本語の文章も、そのまま文字の並びとして探せる。`%`
+        と `_` は、ふつうの文字として探す。新しい順に返す。続きは、前の結果の `nextCursor` を `before` に渡して取る。削除・非表示の投稿、利用停止中のユーザーと、ブロック・ミュートの関係にある人の投稿は出ない
+      operationId: searchPosts
+      parameters:
+      - name: q
+        in: query
+        description: 検索する言葉。前後の空白を取り除いて 1〜100 文字。大文字・小文字、全角・半角の英数字は区別しない
+        required: false
+        schema:
+          type: string
+          default: ""
+        example: カフェ 勉強
+      - name: before
+        in: query
+        description: 続きの読み込み。前の結果の `nextCursor`
+        required: false
+        schema:
+          type: integer
+          format: int64
+        example: 1234
+      - name: limit
+        in: query
+        description: 件数(1〜50。省略すると 20)
+        required: false
+        schema:
+          type: integer
+          format: int32
+        example: 20
+      responses:
+        "200":
+          description: 投稿の一覧。`nextCursor` が `null` なら、それ以上はない
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostPage"
+        "400":
+          description: 検索する言葉が空、または 100 文字を超える
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostPage"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/search/tags:
+    get:
+      tags:
+      - 検索・トレンド
+      summary: ハッシュタグの検索
+      description: ハッシュタグの名前を、部分一致で探す(先頭の `#` は無視する)。名前が言葉で始まるものを先に、次に投稿の多い順に、最大 20
+        件返す
+      operationId: searchTags
+      parameters:
+      - name: q
+        in: query
+        description: 検索する言葉。前後の空白を取り除いて 1〜100 文字。大文字・小文字、全角・半角の英数字は区別しない
+        required: false
+        schema:
+          type: string
+          default: ""
+        example: spring
+      responses:
+        "200":
+          description: ハッシュタグの一覧
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TagResults"
+        "400":
+          description: 検索する言葉が空、または 100 文字を超える
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TagResults"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/search/users:
+    get:
+      tags:
+      - 検索・トレンド
+      summary: ユーザーの検索
+      description: ユーザーID・表示名を、部分一致で探す。ユーザーIDが言葉で始まるものを先に、次にフォロワーの多い順に、最大 20 件返す。利用停止中のユーザーと、ブロックの関係にあるユーザーは出ない。ミュート中のユーザーは出る(ミュートを解除できるように)
+      operationId: searchUsers
+      parameters:
+      - name: q
+        in: query
+        description: 検索する言葉。前後の空白を取り除いて 1〜100 文字。大文字・小文字、全角・半角の英数字は区別しない
+        required: false
+        schema:
+          type: string
+          default: ""
+        example: hana
+      responses:
+        "200":
+          description: ユーザーの一覧
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserResults"
+        "400":
+          description: 検索する言葉が空、または 100 文字を超える
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserResults"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/stream:
+    get:
+      tags:
+      - リアルタイム配信(SSE)
+      summary: リアルタイム配信につなぐ(SSE)
+      description: |-
+        ログイン後に、ブラウザの `new EventSource('/api/stream')` でつなぎ、ログイン中はつなぎっぱなしにする。新しい投稿・削除された投稿・通知が、再読み込みなしで届く。
+
+        | イベント名 | いつ | 送る相手 | 中身 |
+        |---|---|---|---|
+        | `post-created` | 返信以外の投稿が作られた | 接続中の全員(見えない人と、投稿者本人を除く) | 投稿(`PostResponse`)と、投稿者を自分がフォローしているか(`followedByMe`) |
+        | `post-deleted` | 投稿が削除・非表示にされた | 接続中の全員 | `{"id": 1234}` |
+        | `notification` | 通知が作られた | 受け取る人 | `{"unreadCount": 4, "notification": {…通知…}}` |
+
+        1 人が複数のタブで開いてもよい(1 人 5 接続まで。超えたら、古いものから切る)。切れたら、ブラウザが自動でつなぎ直す(つなぎ直したときの取りこぼしは、`GET /api/timeline?after=` と `GET /api/notifications/unread-count` で取る)。**この画面の「Try it out」では、つなぎっぱなしになるため、動きを確かめられない**
+      operationId: stream
+      responses:
+        "200":
+          description: つなぎっぱなしのイベントの流れ(`text/event-stream`)
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              example: |+
+                event:post-deleted
+                data:{"id":1234}
+
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/tags/{name}/posts:
+    get:
+      tags:
+      - 検索・トレンド
+      summary: ハッシュタグの投稿の一覧
+      description: そのハッシュタグを含む投稿(返信を含む)を、新しい順に返す。続きは、前の結果の `nextCursor` を `before`
+        に渡して取る。ハッシュタグは、大文字・小文字、全角・半角を区別しない
+      operationId: tagPosts
+      parameters:
+      - name: name
+        in: path
+        description: ハッシュタグの名前(`#` は付けない)
+        required: true
+        schema:
+          type: string
+        example: springboot
+      - name: before
+        in: query
+        description: 続きの読み込み。前の結果の `nextCursor`
+        required: false
+        schema:
+          type: integer
+          format: int64
+        example: 1234
+      - name: limit
+        in: query
+        description: 件数(1〜50。省略すると 20)
+        required: false
+        schema:
+          type: integer
+          format: int32
+        example: 20
+      responses:
+        "200":
+          description: 投稿の一覧。`nextCursor` が `null` なら、それ以上はない(そのタグの投稿がなくても、空の一覧を返す)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostPage"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/timeline:
+    get:
+      tags:
+      - 投稿・タイムライン
+      summary: タイムライン
+      description: |-
+        返信以外の投稿を、新しい順に返す。`tab=all` は全ユーザー、`tab=following` は自分とフォロー中のユーザーの投稿。削除・非表示の投稿、利用停止中のユーザーと、ブロック・ミュートの関係にある人の投稿は出ない。続きは、前の結果の `nextCursor` を `before` に渡して取る。
+
+        `after` を渡すと、それより新しい投稿を**古い順**に最大 50 件返す(リアルタイム配信が切れていた間の、新着の取り込み用)
+      operationId: timeline
+      parameters:
+      - name: tab
+        in: query
+        description: '`all`(すべて)か `following`(フォロー中)'
+        required: false
+        schema:
+          type: string
+          default: all
+          enum:
+          - all
+          - following
+      - name: before
+        in: query
+        description: 続きの読み込み。前の結果の `nextCursor`(この ID より古い投稿を取る)
+        required: false
+        schema:
+          type: integer
+          format: int64
+        example: 1234
+      - name: after
+        in: query
+        description: 新着の取り込み。この ID より新しい投稿を、古い順に返す(`before` より優先)
+        required: false
+        schema:
+          type: integer
+          format: int64
+        example: 1300
+      - name: limit
+        in: query
+        description: 件数(1〜50。省略すると 20)
+        required: false
+        schema:
+          type: integer
+          format: int32
+        example: 20
+      responses:
+        "200":
+          description: 投稿の一覧。`nextCursor` が `null` なら、それ以上はない
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostPage"
+        "400":
+          description: '`tab` の値が正しくない'
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostPage"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/trends:
+    get:
+      tags:
+      - 検索・トレンド
+      summary: トレンド
+      description: 直近 24 時間の、よく使われたハッシュタグ(使われた投稿の数が多い順。返信も数える)と、人気投稿(いいねの数が多い順)を、それぞれ上位
+        10 件返す。呼ばれるたびに集計する。削除・非表示の投稿と利用停止中のユーザーの投稿は数えない。人気投稿は、見る人のブロック・ミュートでも絞る
+      operationId: trends
+      responses:
+        "200":
+          description: ハッシュタグと人気投稿
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Trends"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/users/{handle}:
+    get:
+      tags:
+      - ユーザー
+      summary: プロフィールの取得
+      description: ユーザーのプロフィールと、フォロー・ブロック・ミュートの関係(`followedByMe` など)を返す。自分がブロックしている相手は表示するが、投稿の一覧は返さない(画面は「ブロックしています」と表示する)
+      operationId: profile
+      parameters:
+      - name: handle
+        in: path
+        description: ユーザーID(`@` の後ろ。大文字・小文字は区別しない)
+        required: true
+        schema:
+          type: string
+        example: taro_dev
+      responses:
+        "200":
+          description: プロフィール
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "404":
+          description: ユーザーが存在しない、利用停止中、または相手が自分をブロックしている
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ProfileResponse"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/users/{handle}/block:
+    put:
+      tags:
+      - ユーザー
+      summary: ブロック
+      description: ユーザーをブロックする。お互いの投稿が見えなくなり、お互いのフォローが解除される(解除したことは通知しない)。ブロックの関係にある間は、お互いに、フォロー・返信・いいね・通知を送ることができない。すでにあるいいね・返信は消さない(ブロックを解除したら、また見える)。何度送っても同じ結果
+      operationId: block
+      parameters:
+      - name: handle
+        in: path
+        description: ユーザーID(`@` の後ろ。大文字・小文字は区別しない)
+        required: true
+        schema:
+          type: string
+        example: hanako
+      responses:
+        "204":
+          description: ブロックした
+        "400":
+          description: 自分自身はブロックできない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: ユーザーが存在しない、利用停止中、または相手が自分をブロックしている
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      tags:
+      - ユーザー
+      summary: ブロックの解除
+      description: 自分がしたブロックを解除する(相手からもブロックされていても解除できる)。何度送っても同じ結果
+      operationId: unblock
+      parameters:
+      - name: handle
+        in: path
+        description: ユーザーID(`@` の後ろ。大文字・小文字は区別しない)
+        required: true
+        schema:
+          type: string
+        example: hanako
+      responses:
+        "204":
+          description: 解除した(ブロックしていなくても、エラーにしない)
+        "404":
+          description: ユーザーが存在しない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/users/{handle}/follow:
+    put:
+      tags:
+      - ユーザー
+      summary: フォロー
+      description: ユーザーをフォローする。すでにフォロー済みでも、エラーにしない(何度送っても同じ結果)。相手に「フォロー」の通知を作る(付け直しても、通知は増やさない)
+      operationId: follow
+      parameters:
+      - name: handle
+        in: path
+        description: ユーザーID(`@` の後ろ。大文字・小文字は区別しない)
+        required: true
+        schema:
+          type: string
+        example: hanako
+      responses:
+        "200":
+          description: フォロー中になった。相手のフォロワーの数を返す
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FollowResult"
+        "400":
+          description: 自分自身はフォローできない
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FollowResult"
+        "403":
+          description: 自分が相手をブロックしている(相手が自分をブロックしているときは、相手が見えないので 404)
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FollowResult"
+        "404":
+          description: ユーザーが存在しない、利用停止中、または相手が自分をブロックしている
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FollowResult"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      tags:
+      - ユーザー
+      summary: フォローの解除
+      description: フォローを解除する。フォローしていなくても、エラーにしない(何度送っても同じ結果)
+      operationId: unfollow
+      parameters:
+      - name: handle
+        in: path
+        description: ユーザーID(`@` の後ろ。大文字・小文字は区別しない)
+        required: true
+        schema:
+          type: string
+        example: hanako
+      responses:
+        "200":
+          description: フォローしていない状態になった。相手のフォロワーの数を返す
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FollowResult"
+        "404":
+          description: ユーザーが存在しない、または利用停止中
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FollowResult"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/users/{handle}/followers:
+    get:
+      tags:
+      - ユーザー
+      summary: フォロワーの一覧
+      description: そのユーザーをフォローしている人を、フォローした新しい順に返す。続きは、前の結果の `nextCursor` を `before`
+        に渡して取る。利用停止中のユーザーと、ブロックの関係にあるユーザーは出ない
+      operationId: followers
+      parameters:
+      - name: handle
+        in: path
+        description: ユーザーID(`@` の後ろ。大文字・小文字は区別しない)
+        required: true
+        schema:
+          type: string
+        example: taro_dev
+      - name: before
+        in: query
+        description: 続きの読み込み。前の結果の `nextCursor`
+        required: false
+        schema:
+          type: integer
+          format: int64
+        example: 40
+      - name: limit
+        in: query
+        description: 件数(1〜50。省略すると 20)
+        required: false
+        schema:
+          type: integer
+          format: int32
+        example: 20
+      responses:
+        "200":
+          description: ユーザーの一覧。`nextCursor` が `null` なら、それ以上はない
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserPage"
+        "404":
+          description: ユーザーが存在しない、利用停止中、または相手が自分をブロックしている
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserPage"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/users/{handle}/following:
+    get:
+      tags:
+      - ユーザー
+      summary: フォロー中のユーザーの一覧
+      description: そのユーザーがフォローしている人を、フォローした新しい順に返す。続きは、前の結果の `nextCursor` を `before`
+        に渡して取る。利用停止中のユーザーと、ブロックの関係にあるユーザーは出ない
+      operationId: following
+      parameters:
+      - name: handle
+        in: path
+        description: ユーザーID(`@` の後ろ。大文字・小文字は区別しない)
+        required: true
+        schema:
+          type: string
+        example: taro_dev
+      - name: before
+        in: query
+        description: 続きの読み込み。前の結果の `nextCursor`
+        required: false
+        schema:
+          type: integer
+          format: int64
+        example: 40
+      - name: limit
+        in: query
+        description: 件数(1〜50。省略すると 20)
+        required: false
+        schema:
+          type: integer
+          format: int32
+        example: 20
+      responses:
+        "200":
+          description: ユーザーの一覧。`nextCursor` が `null` なら、それ以上はない
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserPage"
+        "404":
+          description: ユーザーが存在しない、利用停止中、または相手が自分をブロックしている
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserPage"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/users/{handle}/mute:
+    put:
+      tags:
+      - ユーザー
+      summary: ミュート
+      description: ユーザーをミュートする。その人の投稿が、自分のタイムライン・検索・タグ・ブックマークなどの一覧に出なくなり、その人からの通知も作られなくなる。相手には何も知らされない。何度送っても同じ結果
+      operationId: mute
+      parameters:
+      - name: handle
+        in: path
+        description: ユーザーID(`@` の後ろ。大文字・小文字は区別しない)
+        required: true
+        schema:
+          type: string
+        example: hanako
+      responses:
+        "204":
+          description: ミュートした
+        "400":
+          description: 自分自身はミュートできない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: ユーザーが存在しない、利用停止中、または相手が自分をブロックしている
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      tags:
+      - ユーザー
+      summary: ミュートの解除
+      description: ミュートを解除する。何度送っても同じ結果
+      operationId: unmute
+      parameters:
+      - name: handle
+        in: path
+        description: ユーザーID(`@` の後ろ。大文字・小文字は区別しない)
+        required: true
+        schema:
+          type: string
+        example: hanako
+      responses:
+        "204":
+          description: 解除した(ミュートしていなくても、エラーにしない)
+        "404":
+          description: ユーザーが存在しない
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "403":
+          description: 権限がない、または CSRF の値(ヘッダー `X-XSRF-TOKEN`)がない・違う
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /api/users/{handle}/posts:
+    get:
+      tags:
+      - ユーザー
+      summary: ユーザーの投稿の一覧
+      description: "そのユーザーの投稿を、新しい順に返す。続きは、前の結果の `nextCursor` を `before` に渡して取る。ミュ\
+        ートした人の投稿も、プロフィールを自分で開いたものなので返す。管理者に非表示にされた投稿は、本人が見るときだけ(`hidden: true` の印つ\
+        きで)含まれる。自分がブロックしている相手の一覧は、空で返す"
+      operationId: posts
+      parameters:
+      - name: handle
+        in: path
+        description: ユーザーID(`@` の後ろ。大文字・小文字は区別しない)
+        required: true
+        schema:
+          type: string
+        example: taro_dev
+      - name: tab
+        in: query
+        description: '`posts`(返信以外)・`replies`(返信を含むすべて)・`media`(画像付き。返信を含む)'
+        required: false
+        schema:
+          type: string
+          default: posts
+          enum:
+          - posts
+          - replies
+          - media
+      - name: before
+        in: query
+        description: 続きの読み込み。前の結果の `nextCursor`
+        required: false
+        schema:
+          type: integer
+          format: int64
+        example: 1234
+      - name: limit
+        in: query
+        description: 件数(1〜50。省略すると 20)
+        required: false
+        schema:
+          type: integer
+          format: int32
+        example: 20
+      responses:
+        "200":
+          description: 投稿の一覧。`nextCursor` が `null` なら、それ以上はない
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostPage"
+        "400":
+          description: '`tab` の値が正しくない'
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostPage"
+        "404":
+          description: ユーザーが存在しない、利用停止中、または相手が自分をブロックしている
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PostPage"
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+  /media/**:
+    get:
+      tags:
+      - 画像
+      summary: 画像の取得
+      description: 投稿・アイコン・ヘッダーの画像を返す。URL は、投稿やプロフィールの `url`・`avatarUrl`・`headerUrl`
+        に入っている形(`/media/posts/2026/11/〈推測できない名前〉.webp` など)で、ほかの API の応答から取り出して使う。**ログイン中の人だけが取れる**(バケットは公開せず、サーバーが中継する)。ファイル名は推測できず、中身も変わらないので、ブラウザには
+        30 日覚えてもらう(本人のブラウザだけ)
+      operationId: get_1
+      responses:
+        "200":
+          description: 画像のファイル(JPEG・PNG・WebP・GIF)
+          content:
+            image/webp:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/gif:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: 画像が見つからない(保存場所の外を指す URL を含む)
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: ログインしていない(セッションがない・切れた)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+components:
+  schemas:
+    AdminPost:
+      type: object
+      description: 管理者の画面に出す、投稿 1 件分
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 投稿の ID
+          example: 1234
+        authorId:
+          type: integer
+          format: int64
+          description: 投稿者のユーザーの ID
+          example: 7
+        authorHandle:
+          type:
+          - string
+          - "null"
+          description: 投稿者のユーザーID(`@` の後ろ)。初期設定の前は `null`
+          example: taro_dev
+        text:
+          type: string
+          description: 本文
+          example: "新しいカフェを見つけました #カフェ巡り"
+        createdAt:
+          type: string
+          format: date-time
+          description: 投稿した日時(UTC)
+          example: 2026-11-01T03:15:00Z
+        hidden:
+          type: boolean
+          description: 管理者に非表示にされているか
+          example: false
+        authorSuspended:
+          type: boolean
+          description: 投稿者が利用停止中か
+          example: false
+        reply:
+          type: boolean
+          description: 返信か
+          example: false
+    AdminPostPage:
+      type: object
+      description: 投稿の一覧の 1 ページ(ページ番号の方式。ページ番号は 0 から)
+      properties:
+        items:
+          type: array
+          description: 投稿(新しい順。50 件ずつ)
+          items:
+            $ref: "#/components/schemas/AdminPost"
+        page:
+          type: integer
+          format: int32
+          description: このページの番号(0 から)
+          example: 0
+        totalPages:
+          type: integer
+          format: int32
+          description: ページの数
+          example: 3
+        total:
+          type: integer
+          format: int64
+          description: 条件に合う投稿の総数
+          example: 120
+    AdminUserPage:
+      type: object
+      description: ユーザーの一覧の 1 ページ(ページ番号の方式。ページ番号は 0 から)
+      properties:
+        items:
+          type: array
+          description: ユーザー(登録の新しい順。50 件ずつ)
+          items:
+            $ref: "#/components/schemas/AdminUserResponse"
+        page:
+          type: integer
+          format: int32
+          description: このページの番号(0 から)
+          example: 0
+        totalPages:
+          type: integer
+          format: int32
+          description: ページの数
+          example: 3
+        total:
+          type: integer
+          format: int64
+          description: 条件に合うユーザーの総数
+          example: 120
+    AdminUserResponse:
+      type: object
+      description: 管理者の画面に出す、ユーザー 1 人分
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ユーザーの ID
+          example: 7
+        handle:
+          type:
+          - string
+          - "null"
+          description: ユーザーID(`@` の後ろ)。初期設定の前は `null`
+          example: taro_dev
+        displayName:
+          type:
+          - string
+          - "null"
+          description: 表示名。初期設定の前は `null`
+          example: たろう
+        email:
+          type: string
+          description: メールアドレス
+          example: taro@example.com
+        role:
+          type: string
+          description: 権限。`USER`(一般)か `ADMIN`(管理者)
+          enum:
+          - USER
+          - ADMIN
+          example: USER
+        suspended:
+          type: boolean
+          description: 利用停止中か
+          example: false
+        postCount:
+          type: integer
+          format: int64
+          description: 投稿の数(返信を含む。削除したものは数えない)
+          example: 85
+        createdAt:
+          type: string
+          format: date-time
+          description: 登録した日時(UTC)
+          example: 2026-10-25T05:00:00Z
+    ApiError:
+      type: object
+      description: エラーのときに返す JSON。`message` は、そのまま画面に出せる日本語
+      properties:
+        message:
+          type: string
+          description: エラーの内容(画面にそのまま出せる日本語)
+          example: 入力内容に誤りがあります
+        errors:
+          type: array
+          description: 入力チェックのエラーの一覧。入力チェックのとき以外は、空の配列
+          items:
+            $ref: "#/components/schemas/FieldProblem"
+    AvailabilityResponse:
+      type: object
+      description: ユーザーIDが使えるかの結果
+      properties:
+        available:
+          type: boolean
+          description: 使えるか
+          example: true
+        message:
+          type: string
+          description: 画面にそのまま出せる文。使えるときは「使えます」、使えないときは理由
+          example: 使えます
+    BookmarkResult:
+      type: object
+      description: ブックマークの結果
+      properties:
+        bookmarked:
+          type: boolean
+          description: 自分がブックマークしているか
+          example: true
+    ConfigResponse:
+      type: object
+      description: 画面の設定
+      properties:
+        googleEnabled:
+          type: boolean
+          description: Google ログインが使えるか。`false` のときは、画面に「Google でログイン」を出さない
+          example: true
+    EditRequest:
+      type: object
+      description: 投稿の編集に送る内容
+      properties:
+        text:
+          type: string
+          description: 新しい本文(1000 文字以内。画像がない投稿は、空にできない)
+          example: "書き直しました #SpringBoot"
+    EmailOnly:
+      type: object
+      description: メールアドレスだけを送る内容(確認メールの再送・パスワード再設定メールの送信)
+      properties:
+        email:
+          type: string
+          description: メールアドレス
+          example: taro@example.com
+          minLength: 1
+      required:
+      - email
+    FieldProblem:
+      type: object
+      description: 入力チェックのエラー 1 件
+      properties:
+        field:
+          type: string
+          description: エラーになった項目の名前
+          example: text
+        message:
+          type: string
+          description: その項目のエラーの内容
+          example: 1000文字以内で入力してください
+    FollowResult:
+      type: object
+      description: フォローの結果
+      properties:
+        following:
+          type: boolean
+          description: 自分がフォローしているか
+          example: true
+        followerCount:
+          type: integer
+          format: int64
+          description: 相手のフォロワーの数(この操作のあと)
+          example: 31
+    ImageForm:
+      type: object
+      description: 画像の変更に送る内容(`multipart/form-data`)
+      properties:
+        file:
+          type: string
+          format: binary
+          description: 画像ファイル(5MB まで。JPEG・PNG・WebP・GIF。形式は拡張子ではなく中身で確かめる)
+    LikeResult:
+      type: object
+      description: いいねの結果
+      properties:
+        liked:
+          type: boolean
+          description: 自分がいいねしているか
+          example: true
+        likeCount:
+          type: integer
+          format: int64
+          description: いいねの数(この操作のあと)
+          example: 6
+    Login:
+      type: object
+      description: ログインに送る内容
+      properties:
+        email:
+          type: string
+          description: メールアドレス
+          example: taro@example.com
+          minLength: 1
+        password:
+          type: string
+          format: password
+          description: パスワード
+          example: example-pass-123
+          minLength: 1
+      required:
+      - email
+      - password
+    MeResponse:
+      type: object
+      description: ログイン中のユーザー。初期設定の前は `handle`・`displayName` が `null`、`onboarded`
+        が `false`
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ユーザーの ID(1 から増えていく整数)
+          example: 7
+        email:
+          type: string
+          description: メールアドレス(小文字)
+          example: taro@example.com
+        handle:
+          type:
+          - string
+          - "null"
+          description: ユーザーID(`@` の後ろ)。初期設定の前は `null`
+          example: taro_dev
+        displayName:
+          type:
+          - string
+          - "null"
+          description: 表示名。初期設定の前は `null`
+          example: たろう
+        avatarUrl:
+          type:
+          - string
+          - "null"
+          description: アイコン画像の URL(`/media/…`)。ないときは `null`
+          example: /media/avatars/3f9c1a7e-0b1d-4c55-9e0a-2b6f4c7d8e91.webp
+        role:
+          type: string
+          description: 権限。`USER`(一般)か `ADMIN`(管理者)
+          enum:
+          - USER
+          - ADMIN
+          example: USER
+        onboarded:
+          type: boolean
+          description: 初期設定(ユーザーIDと表示名の決定)が済んでいるか
+          example: true
+        unreadNotificationCount:
+          type: integer
+          format: int64
+          description: 未読の通知の数
+          example: 3
+    NewPassword:
+      type: object
+      description: 新しいパスワードを送る内容
+      properties:
+        token:
+          type: string
+          description: 再設定メールのリンク(`?token=…`)の値
+          example: k3Jx0b...(推測できない長い文字列)
+          minLength: 1
+        password:
+          type: string
+          format: password
+          description: 新しいパスワード(8〜72 文字)
+          example: example-new-pass-456
+      required:
+      - password
+      - token
+    NotificationActor:
+      type: object
+      description: 通知の、操作した人
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ユーザーの ID
+          example: 9
+        handle:
+          type: string
+          description: ユーザーID(`@` の後ろ)
+          example: hanako
+        displayName:
+          type: string
+          description: 表示名
+          example: はなこ
+        avatarUrl:
+          type:
+          - string
+          - "null"
+          description: アイコン画像の URL(`/media/…`)。ないときは `null`
+    NotificationPage:
+      type: object
+      description: 通知の一覧の 1 ページ
+      properties:
+        items:
+          type: array
+          description: 通知(新しい順)
+          items:
+            $ref: "#/components/schemas/NotificationResponse"
+        nextCursor:
+          type:
+          - integer
+          - "null"
+          format: int64
+          description: 続きを読み込むときに、`before` に渡す値。`null` なら、それ以上はない
+          example: 480
+    NotificationPost:
+      type: object
+      description: 通知の対象の投稿の、短い紹介
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 投稿の ID。押すと、その投稿の詳細へ移る
+          example: 1234
+        textPreview:
+          type: string
+          description: 本文の先頭 40 文字
+          example: "今日は #SpringBoot の勉強を…"
+    NotificationResponse:
+      type: object
+      description: 通知。リアルタイム配信(SSE)の `notification` イベントでも、同じ形で届く
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 通知の ID(大きいほど新しい)
+          example: 501
+        type:
+          type: string
+          description: 種類。`LIKE`(いいねされた)・`REPLY`(返信された)・`FOLLOW`(フォローされた)・`MENTION`(メンションされた)
+          enum:
+          - LIKE
+          - REPLY
+          - FOLLOW
+          - MENTION
+          example: LIKE
+        actor:
+          $ref: "#/components/schemas/NotificationActor"
+          description: 操作した人
+        post:
+          type: "null"
+          $ref: "#/components/schemas/NotificationPost"
+          description: 対象の投稿。`FOLLOW` のときは `null`
+        read:
+          type: boolean
+          description: 既読か
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          description: 通知ができた日時(UTC)
+          example: 2026-11-01T03:20:00Z
+    Onboarding:
+      type: object
+      description: 初期設定に送る内容
+      properties:
+        handle:
+          type: string
+          description: ユーザーID。半角英数字と `_` の 3〜15 文字。大文字・小文字は区別せずに重複を確かめる(表示は入力したとおり)。あとから変えられない
+          example: taro_dev
+        displayName:
+          type: string
+          description: 表示名(1〜50 文字)
+          example: たろう
+          maxLength: 50
+          minLength: 0
+      required:
+      - displayName
+      - handle
+    PostAuthor:
+      type: object
+      description: 投稿者
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ユーザーの ID
+          example: 7
+        handle:
+          type: string
+          description: ユーザーID(`@` の後ろ)
+          example: taro_dev
+        displayName:
+          type: string
+          description: 表示名
+          example: たろう
+        avatarUrl:
+          type:
+          - string
+          - "null"
+          description: アイコン画像の URL(`/media/…`)。ないときは `null`
+          example: /media/avatars/3f9c1a7e-0b1d-4c55-9e0a-2b6f4c7d8e91.webp
+    PostForm:
+      type: object
+      description: 投稿・返信の作成に送る内容(`multipart/form-data`)
+      properties:
+        text:
+          type: string
+          description: 本文(1000 文字以内)。画像がないときは必須
+          example: "新しいカフェを見つけました #カフェ巡り"
+        replyToId:
+          type:
+          - integer
+          - "null"
+          format: int64
+          description: 返信先の投稿の ID。返信のときだけ送る
+          example: 123
+        images:
+          type: array
+          description: 画像ファイル(0〜10 枚。1 枚 5MB まで。JPEG・PNG・WebP・GIF。形式は拡張子ではなく中身で確かめる)
+          items:
+            type: string
+            format: binary
+          maxItems: 10
+        alts:
+          type: array
+          description: "画像ごとの代替テキスト(1 つ 1000 文字以内。空でもよい)。`images` と同じ順番・同じ数で送る。「,」\
+            を含んでも分かれず、送られたとおりに受け取る"
+          items:
+            type: string
+    PostImage:
+      type: object
+      description: 投稿の画像
+      properties:
+        url:
+          type: string
+          description: 画像の URL(`/media/…`。ログイン中の人だけが取れる)
+          example: /media/posts/2026/11/a1b2c3d4-0b1d-4c55-9e0a-2b6f4c7d8e91.webp
+        alt:
+          type: string
+          description: 代替テキスト(読み上げ用の説明)。ないときは空文字
+          example: ノートパソコンの画面
+        width:
+          type: integer
+          format: int32
+          description: 画像の幅(ピクセル)
+          example: 1600
+        height:
+          type: integer
+          format: int32
+          description: 画像の高さ(ピクセル)
+          example: 1200
+    PostPage:
+      type: object
+      description: 投稿の一覧の 1 ページ
+      properties:
+        items:
+          type: array
+          description: 投稿(この API の並び順どおり)
+          items:
+            $ref: "#/components/schemas/PostResponse"
+        nextCursor:
+          type:
+          - integer
+          - "null"
+          format: int64
+          description: 続きを読み込むときに、`before`(古い順の一覧では `after`)に渡す値。`null` なら、それ以上はない
+          example: 1214
+    PostReplyTo:
+      type: object
+      description: 返信先
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 返信先の投稿の ID
+          example: 1200
+        authorHandle:
+          type:
+          - string
+          - "null"
+          description: 返信先の投稿者のユーザーID。返信先が見られないときは `null`
+          example: hanako
+        unavailable:
+          type: boolean
+          description: 返信先が見られない(削除・非表示など)か。`true` のとき、画面には「削除された投稿への返信」と出す
+          example: false
+    PostResponse:
+      type: object
+      description: 投稿。投稿を返す API は、すべてこの形を使う。見られない投稿(削除・非表示・投稿者が利用停止中)は、`unavailable`
+        が `true` で、`id` 以外が空になる
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: 投稿の ID(1 から増えていく整数。大きいほど新しい)
+          example: 1234
+        author:
+          type: "null"
+          $ref: "#/components/schemas/PostAuthor"
+          description: 投稿者。見られない投稿では `null`
+        text:
+          type: string
+          description: 本文(改行を含む)。画像だけの投稿は空文字。ハッシュタグ・メンション・URL の抜き出しは、画面が行う
+          example: "新しいカフェを見つけました #カフェ巡り @hanako"
+        images:
+          type: array
+          description: 画像(0〜10 枚。投稿した順)
+          items:
+            $ref: "#/components/schemas/PostImage"
+        replyTo:
+          type: "null"
+          $ref: "#/components/schemas/PostReplyTo"
+          description: 返信のときの、返信先。返信でなければ `null`
+        likeCount:
+          type: integer
+          format: int64
+          description: いいねの数
+          example: 5
+        replyCount:
+          type: integer
+          format: int64
+          description: 返信の数(見えない返信は数えない)
+          example: 2
+        likedByMe:
+          type: boolean
+          description: 自分がいいねしているか
+          example: false
+        bookmarkedByMe:
+          type: boolean
+          description: 自分がブックマークしているか
+          example: false
+        mine:
+          type: boolean
+          description: 自分の投稿か(編集・削除のメニューを出すかの判断に使う)
+          example: false
+        hidden:
+          type: boolean
+          description: 管理者に非表示にされているか。`true` の投稿が見えるのは、投稿者本人のプロフィールだけ
+          example: false
+        createdAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: 投稿した日時(UTC。ISO 8601)
+          example: 2026-11-01T03:15:00Z
+        editedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+          description: 最後に編集した日時(UTC)。編集していなければ `null`
+          example: 2026-11-01T03:20:00Z
+        unavailable:
+          type: boolean
+          description: 見られない投稿か(削除・管理者による非表示・投稿者の利用停止)。`true` のときは、`id` 以外は空
+          example: false
+    ProfileRequest:
+      type: object
+      description: プロフィールの更新に送る内容
+      properties:
+        displayName:
+          type: string
+          description: 表示名(必須。1〜50 文字。前後の空白は取り除く)
+          example: たろう
+        bio:
+          type:
+          - string
+          - "null"
+          description: 自己紹介(160 文字以内。空にすると未設定になる)
+          example: Java を勉強中です
+    ProfileResponse:
+      type: object
+      description: プロフィール
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ユーザーの ID
+          example: 7
+        handle:
+          type: string
+          description: ユーザーID(`@` の後ろ)
+          example: taro_dev
+        displayName:
+          type: string
+          description: 表示名
+          example: たろう
+        bio:
+          type:
+          - string
+          - "null"
+          description: 自己紹介(160 文字以内)。未設定のときは `null`
+          example: Java を勉強中です
+        avatarUrl:
+          type:
+          - string
+          - "null"
+          description: アイコン画像の URL(`/media/…`)。ないときは `null`
+          example: /media/avatars/3f9c1a7e-0b1d-4c55-9e0a-2b6f4c7d8e91.webp
+        headerUrl:
+          type:
+          - string
+          - "null"
+          description: ヘッダー画像の URL(`/media/…`)。ないときは `null`
+        followingCount:
+          type: integer
+          format: int64
+          description: フォローしている人の数
+          example: 12
+        followerCount:
+          type: integer
+          format: int64
+          description: フォロワーの数
+          example: 30
+        postCount:
+          type: integer
+          format: int64
+          description: 投稿の数(返信を含む。削除したものは数えない)
+          example: 85
+        joinedAt:
+          type: string
+          format: date-time
+          description: 登録した日時(UTC)
+          example: 2026-10-25T05:00:00Z
+        followedByMe:
+          type: boolean
+          description: 自分がフォローしているか
+          example: false
+        followsMe:
+          type: boolean
+          description: 相手が自分をフォローしているか
+          example: true
+        blockedByMe:
+          type: boolean
+          description: 自分がブロックしているか
+          example: false
+        mutedByMe:
+          type: boolean
+          description: 自分がミュートしているか
+          example: false
+        me:
+          type: boolean
+          description: 自分自身のプロフィールか
+          example: false
+    ReadRequest:
+      type: object
+      description: 既読にする範囲
+      properties:
+        upToId:
+          type: integer
+          format: int64
+          description: この ID 以下の、自分の通知を、すべて既読にする(通知の一覧の先頭の `id` を送る)
+          example: 501
+      required:
+      - upToId
+    Signup:
+      type: object
+      description: 登録に送る内容
+      properties:
+        email:
+          type: string
+          format: email
+          description: メールアドレス(254 文字以内。大文字・小文字は区別しない)
+          example: taro@example.com
+          maxLength: 254
+          minLength: 0
+        password:
+          type: string
+          format: password
+          description: パスワード(8〜72 文字)
+          example: example-pass-123
+      required:
+      - email
+      - password
+    SuspensionRequest:
+      type: object
+      description: 利用停止・解除に送る内容
+      properties:
+        suspended:
+          type: boolean
+          description: '`true` で利用停止にする、`false` で解除する'
+          example: true
+      required:
+      - suspended
+    TagCount:
+      type: object
+      description: ハッシュタグと、使われた投稿の数
+      properties:
+        name:
+          type: string
+          description: タグの名前(`#` なし。小文字・全角を半角にそろえた形)
+          example: springboot
+        postCount:
+          type: integer
+          format: int64
+          description: 使われた投稿の数(トレンドでは直近 24 時間の数)
+          example: 12
+    TagResults:
+      type: object
+      description: ハッシュタグの検索結果
+      properties:
+        items:
+          type: array
+          description: ハッシュタグ(最大 20 件)
+          items:
+            $ref: "#/components/schemas/TagCount"
+    Token:
+      type: object
+      description: メールのリンクの値を送る内容(メールアドレスの確認)
+      properties:
+        token:
+          type: string
+          description: メールのリンク(`?token=…`)の値
+          example: k3Jx0b...(推測できない長い文字列)
+          minLength: 1
+      required:
+      - token
+    Trends:
+      type: object
+      description: トレンド
+      properties:
+        tags:
+          type: array
+          description: 直近 24 時間によく使われたハッシュタグ(上位 10 件)
+          items:
+            $ref: "#/components/schemas/TagCount"
+        popularPosts:
+          type: array
+          description: 直近 24 時間の人気投稿(いいねが 1 件以上の、返信以外の投稿。上位 10 件)
+          items:
+            $ref: "#/components/schemas/PostResponse"
+    UnreadCount:
+      type: object
+      description: 未読の通知の数
+      properties:
+        unreadCount:
+          type: integer
+          format: int64
+          description: 未読の通知の数
+          example: 3
+    UserPage:
+      type: object
+      description: ユーザーの一覧の 1 ページ
+      properties:
+        items:
+          type: array
+          description: ユーザー(この API の並び順どおり)
+          items:
+            $ref: "#/components/schemas/UserSummary"
+        nextCursor:
+          type:
+          - integer
+          - "null"
+          format: int64
+          description: 続きを読み込むときに、`before` に渡す値。`null` なら、それ以上はない
+          example: 40
+    UserResults:
+      type: object
+      description: ユーザーの検索結果
+      properties:
+        items:
+          type: array
+          description: ユーザー(最大 20 件)
+          items:
+            $ref: "#/components/schemas/UserSummary"
+    UserSummary:
+      type: object
+      description: 一覧用のユーザー(検索結果・フォロー中・フォロワー・ブロック・ミュートの一覧など)
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: ユーザーの ID
+          example: 9
+        handle:
+          type: string
+          description: ユーザーID(`@` の後ろ)
+          example: hanako
+        displayName:
+          type: string
+          description: 表示名
+          example: はなこ
+        avatarUrl:
+          type:
+          - string
+          - "null"
+          description: アイコン画像の URL(`/media/…`)。ないときは `null`
+        bio:
+          type:
+          - string
+          - "null"
+          description: 自己紹介。未設定のときは `null`
+          example: Web デザインとカフェめぐりが好きです
+        followedByMe:
+          type: boolean
+          description: 自分がフォローしているか
+          example: true
+        followsMe:
+          type: boolean
+          description: 相手が自分をフォローしているか
+          example: false
+    VisibilityRequest:
+      type: object
+      description: 非表示・解除に送る内容
+      properties:
+        hidden:
+          type: boolean
+          description: '`true` で非表示にする、`false` で表示に戻す'
+          example: true
+      required:
+      - hidden
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      description: ログイン(`POST /api/auth/login` か Google ログイン)でサーバーが渡す Cookie。ブラウザが自動で付けるので、この画面の「Authorize」では設定できない。先にアプリでログインしておく
+      name: SESSION
+      in: cookie

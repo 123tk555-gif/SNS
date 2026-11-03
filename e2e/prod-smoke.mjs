@@ -85,6 +85,22 @@ check('再読み込みしてもログインが続く', true);
 const admin = await a.page.evaluate(async () => (await fetch('/api/admin/users')).status);
 check('一般ユーザーは管理者 API が 404', admin === 404);
 
+// API 仕様書(Swagger UI)。HTTPS の入り口を通しても開け、画面のエラー(CSP 違反を含む)がなく、ログイン中なら Try it out で API を呼べる
+await a.page.goto(`${base}/swagger-ui.html`);
+await a.page.waitForSelector('.swagger-ui .info .title');
+check('API 仕様書(Swagger UI)が HTTPS で開く', (await a.page.textContent('.swagger-ui .info .title')).includes('API 仕様書'));
+const authTag = a.page.locator('.opblock-tag[data-tag="アカウント"]');
+await authTag.click();
+const meBlock = a.page.locator('.opblock-get:has(.opblock-summary-path[data-path="/api/auth/me"])').first();
+await meBlock.locator('.opblock-summary').click();
+await meBlock.locator('.try-out__btn').click();
+await meBlock.locator('.execute').click();
+await meBlock.locator('.live-responses-table td.response-col_status:not(.col_header)').waitFor({ timeout: 8000 });
+check('Swagger UI の Try it out で /api/auth/me → 200', (await meBlock.locator('.live-responses-table td.response-col_status:not(.col_header)').first().innerText()).startsWith('200'));
+const anonymous = await browser.newContext({ ignoreHTTPSErrors: true });
+const docs = await anonymous.request.get(`${base}/v3/api-docs`);
+check('/v3/api-docs をログインなしで取れる', docs.status() === 200 && (await docs.json()).openapi?.startsWith('3.'), `${docs.status()}`);
+
 // HTTP で開くと HTTPS に移る
 const http = await fetch(base.replace('https://', 'http://'), { redirect: 'manual' });
 check('HTTP は HTTPS へ転送される', http.status >= 300 && http.status < 400 && (http.headers.get('location') ?? '').startsWith('https://'));

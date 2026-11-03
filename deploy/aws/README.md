@@ -114,6 +114,14 @@ sudo /opt/sns/deploy/aws/s3-tasks.sh restore sns-20261102-180000.dump  # 名前�
 - **`create-server.ps1` が「text contents could not be decoded」で止まった**: `user-data.sh` を `fileb://` で渡すように直してある(日本語のコメントを含むため)
 - **Google ログインで「redirect_uri_mismatch」**: 手順 1-3 のリダイレクト URI を確かめる
 
+## API 仕様書(Swagger)
+公開したサーバーでも、`https://〈公開のアドレス〉/swagger-ui.html` で、ログインなしで開ける(OpenAPI は `/v3/api-docs`)。
+止めたいとき(メモリが足りないなど)は、パラメータストアに入れて、サーバーを起動し直す(`boot.sh` が、起動のたびに `.env` に書く):
+```powershell
+aws ssm put-parameter --name /sns/api-docs-enabled --type String --value false --overwrite --profile taskboard --region ap-northeast-1
+# 戻すとき: aws ssm delete-parameter --name /sns/api-docs-enabled --profile taskboard --region ap-northeast-1
+```
+
 ## 料金の確認
 - 「請求とコスト管理」で、料金とクレジットの残りを見る
 - AWS Budgets のメール(月 5 ドルの 80% を超えた・超えそう)が届いたら、サーバーを止め忘れていないか確かめる

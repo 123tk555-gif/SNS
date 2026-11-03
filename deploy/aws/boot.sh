@@ -43,6 +43,9 @@ MAIL_USER=$(need mail-username)
   echo "MAIL_FROM='${MAIL_USER}'"
   echo "GOOGLE_CLIENT_ID='$(param google-client-id)'"
   echo "GOOGLE_CLIENT_SECRET='$(param google-client-secret)'"
+  # 任意: API 仕様書を止めたいとき(パラメータストアの /sns/api-docs-enabled に false を入れる)。ないときは有効
+  API_DOCS=$(param api-docs-enabled)
+  if [ -n "$API_DOCS" ] && [ "$API_DOCS" != "None" ]; then echo "API_DOCS_ENABLED=${API_DOCS}"; fi
 } > .env.new
 mv .env.new .env
 

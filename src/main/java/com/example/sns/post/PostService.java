@@ -13,6 +13,7 @@ import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -46,7 +47,11 @@ public class PostService {
     public static final String CANNOT_INTERACT = "このユーザーの投稿には、返信・いいねができません";
 
     /** タイムラインの 1 ページ。nextCursor が null なら、それ以上はない(機能定義書 1.5) */
-    public record Page(List<PostResponse> items, Long nextCursor) {
+    @Schema(name = "PostPage", description = "投稿の一覧の 1 ページ")
+    public record Page(
+            @Schema(description = "投稿(この API の並び順どおり)") List<PostResponse> items,
+            @Schema(description = "続きを読み込むときに、`before`(古い順の一覧では `after`)に渡す値。`null` なら、それ以上はない", example = "1214", nullable = true)
+            Long nextCursor) {
     }
 
     private final PostRepository posts;

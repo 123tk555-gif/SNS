@@ -18,6 +18,7 @@ X(旧 Twitter)や Facebook のような、タイムライン型の SNS の Web �
 | [機能定義書](docs/機能定義書.md) | 各機能がどう動くか(処理・API・データ・権限) |
 | [画面仕様定義書](docs/画面仕様定義書.md) | 画面の表示・操作・メッセージ |
 | [受け入れ確認表](docs/受け入れ確認表.md) | 受け入れ基準を、何で確かめたか |
+| [API 仕様書](docs/openapi.yaml)(OpenAPI) | 全 API の説明・引数・応答・データの形(日本語)。サーバーを起動すると、Swagger UI(http://localhost:8080/swagger-ui.html)でも読めて、試せる |
 | [prototype/](prototype/) | 最初に作った HTML・CSS・JavaScript だけの試作(`index.html` をブラウザで開く) |
 
 ## 動かし方(開発用)
@@ -42,13 +43,23 @@ npm run dev
 - 動作確認用のテストデータ(ユーザー 5 人・投稿など。パスワードはすべて `password123`、`taro@example.com` は管理者)を入れるには、`./mvnw spring-boot:run "-Dspring-boot.run.profiles=seed"` で起動します。**今までのデータは消えます。**
 - 画面を作ってサーバーから配信したいときは、`frontend` で `npm run build` をしてから、サーバーを起動して <http://localhost:8080> を開きます。
 
+## API 仕様書(Swagger)
+
+全 API(53 個)の仕様を、Swagger(OpenAPI)で読めます。**ログイン不要**で開けます。
+
+- **Swagger UI**: サーバーを起動して <http://localhost:8080/swagger-ui.html> を開く。API ごとに、日本語の説明・引数・返るデータ・エラーを読める。先にアプリでログインしておくと、「Try it out」→「Execute」で実際に呼べる(CSRF のヘッダーは、自動で付く)
+- **OpenAPI のファイル**: `/v3/api-docs`(JSON)・`/v3/api-docs.yaml`(YAML)。保存用のコピーは [docs/openapi.yaml](docs/openapi.yaml)(Swagger を読めるツールに渡せる)
+- **公開したサーバー**でも、同じ場所(`https://〈公開のアドレス〉/swagger-ui.html`)で開ける
+- 説明は、コントローラーの `@Operation`・`@ApiResponse` と、データの形(record)の `@Schema` に書いてある。API や説明を変えたら、`./mvnw test -Dtest=OpenApiDocsTest -Dopenapi.update=true` で `docs/openapi.yaml` を作り直す(忘れると、自動テストが失敗して教えてくれる)
+- 止めたいとき: 環境変数 `API_DOCS_ENABLED=false`
+
 ## テスト
 
 | 何を | どうやって | 内容 |
 |---|---|---|
-| サーバー | `./mvnw test` | JUnit。本物の PostgreSQL を Testcontainers で起動して確かめる(Docker が必要)。画像の S3 保存は、S3 の代わりの S3Mock で確かめる。94 件 |
+| サーバー | `./mvnw test` | JUnit。本物の PostgreSQL を Testcontainers で起動して確かめる(Docker が必要)。画像の S3 保存は、S3 の代わりの S3Mock で確かめる。100 件 |
 | 画面のコード | `cd frontend && npm run lint` | oxlint |
-| 画面の操作 | `cd e2e && npm install && npm test` | Playwright で、実際のブラウザ(Edge)を動かす。9 本・203 項目(公開前の点検 `m10-release-flow` を含む) |
+| 画面の操作 | `cd e2e && npm install && npm test` | Playwright で、実際のブラウザ(Edge)を動かす。10 本・217 項目(公開前の点検 `m10-release-flow`・API 仕様書 `m11-apidocs-flow` を含む) |
 | 見やすさの点検 | `cd e2e && npm run audit` | 全画面を 375px/1280px・ライト/ダークで開き、横スクロール・名前のない部品・フォーカスの枠などを調べる |
 
 画面の操作テストの前提: データベース・サーバー(8080)・画面(5173)が動いていて、テストデータ(seed)が入っていること。テストの前後に、作ったデータ(投稿・フォロー・通知・`e2e_` で始まるテスト用ユーザー)は消します(`npm run cleanup` だけでも実行できます)。ユーザーはそのまま残ります。

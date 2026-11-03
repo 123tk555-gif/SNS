@@ -1,5 +1,6 @@
 package com.example.sns.profile;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import com.example.sns.hashtag.HashtagService;
 import com.example.sns.hashtag.Hashtags;
 import com.example.sns.notification.NotificationService;
@@ -30,7 +31,10 @@ public class ProfileService {
     static final String CANNOT_FOLLOW_BLOCKED = "このユーザーはフォローできません";
     static final String CANNOT_TARGET_SELF = "自分自身にはできません";
 
-    public record FollowResult(boolean following, long followerCount) {
+    @Schema(description = "フォローの結果")
+    public record FollowResult(
+            @Schema(description = "自分がフォローしているか", example = "true") boolean following,
+            @Schema(description = "相手のフォロワーの数(この操作のあと)", example = "31") long followerCount) {
     }
 
     private final UserRepository users;

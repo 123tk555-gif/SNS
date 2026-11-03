@@ -73,6 +73,11 @@ public class SecurityConfig {
                                 "/api/auth/password-reset", "/api/auth/password-reset/confirm")
                         .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/config").permitAll()
+                        // API 仕様書(OpenAPI と Swagger UI)は、ログインなしで見られる。API の一覧を隠すことには頼らず、
+                        // 守りは各 API のログイン・権限の確認で行う(NF-SEC-01, 02)。止めたいときは API_DOCS_ENABLED=false
+                        .requestMatchers(HttpMethod.GET, "/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml",
+                                "/swagger-ui.html", "/swagger-ui/**")
+                        .permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/**", "/media/**").authenticated()
                         // 画面のファイル(index.html・JS・CSS)は誰でも取れる。どの画面を出すかは画面側が決める

@@ -1,5 +1,6 @@
 package com.example.sns.post;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import com.example.sns.notification.NotificationService;
 import com.example.sns.notification.NotificationType;
 import com.example.sns.profile.Relations;
@@ -18,10 +19,15 @@ import org.springframework.web.server.ResponseStatusException;
 @Transactional
 public class ReactionService {
 
-    public record LikeResult(boolean liked, long likeCount) {
+    @Schema(description = "いいねの結果")
+    public record LikeResult(
+            @Schema(description = "自分がいいねしているか", example = "true") boolean liked,
+            @Schema(description = "いいねの数(この操作のあと)", example = "6") long likeCount) {
     }
 
-    public record BookmarkResult(boolean bookmarked) {
+    @Schema(description = "ブックマークの結果")
+    public record BookmarkResult(
+            @Schema(description = "自分がブックマークしているか", example = "true") boolean bookmarked) {
     }
 
     private final PostRepository posts;

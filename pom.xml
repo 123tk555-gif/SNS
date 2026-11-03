@@ -17,6 +17,8 @@
 		<java.version>21</java.version>
 		<!-- AWS SDK for Java(S3)。部品どうしのバージョンを BOM でそろえる -->
 		<aws-sdk.version>2.57.0</aws-sdk.version>
+		<!-- API 仕様書(OpenAPI)の自動生成と Swagger UI。Spring Boot 4 向けの 3 系 -->
+		<springdoc.version>3.1.1</springdoc.version>
 	</properties>
 	<dependencyManagement>
 		<dependencies>
@@ -75,6 +77,12 @@
 		<dependency>
 			<groupId>software.amazon.awssdk</groupId>
 			<artifactId>url-connection-client</artifactId>
+		</dependency>
+		<!-- API 仕様書: コードから OpenAPI を作り、Swagger UI(/swagger-ui.html)で見せる -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>${springdoc.version}</version>
 		</dependency>
 		<!-- 確認メール・パスワード再設定メール -->
 		<dependency>
