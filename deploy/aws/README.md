@@ -109,7 +109,9 @@ sudo /opt/sns/deploy/aws/s3-tasks.sh restore sns-20261102-180000.dump  # 名前�
 - **開けない**: サーバーの中で `sudo systemctl status sns-boot` と `sudo journalctl -u sns-boot -n 50` を見る。最初の作成のときは `sudo tail -n 50 /var/log/cloud-init-output.log`
 - **「パラメータストアに /sns/… がありません」**: `set-secrets.ps1` をもう一度動かす
 - **DuckDNS の更新に失敗**: 名前とトークンを確かめて `set-secrets.ps1` で入れ直し、`start.ps1` で起動し直す
-- **メールが届かない**: アプリのログ(`sudo docker compose -f /opt/sns/compose.prod.yaml logs app`)を見る。Gmail のアプリパスワードを作り直したら `set-secrets.ps1` で入れ直す
+- **メールが届かない**: アプリのログ(`sudo docker compose -f /opt/sns/compose.prod.yaml logs app`)を見る。エラーがなければ、アプリからは送れていて、宛先の側で遅れている・止まっている。**携帯会社のアドレス(`i.softbank.jp`・`docomo.ne.jp`・`ezweb.ne.jp` など)は、知らない送信元からのメールが遅れたり届かなかったりしやすい**ので、Gmail などで登録する。送信元の Gmail の受信トレイに「Mail Delivery Subsystem」の配信エラーが来ていないかも見る。Gmail のアプリパスワードを作り直したら `set-secrets.ps1` で入れ直す
+- **最初の起動が「compose build requires buildx」で止まった**: 最新の docker compose がイメージを作るときに buildx が必要。`user-data.sh` で入れるようにしてある(古い版で作ったサーバーは、SSM のセッションで `docker-buildx` を `/usr/local/lib/docker/cli-plugins/` に入れ、`sudo systemctl start sns-boot` を実行する)
+- **`create-server.ps1` が「text contents could not be decoded」で止まった**: `user-data.sh` を `fileb://` で渡すように直してある(日本語のコメントを含むため)
 - **Google ログインで「redirect_uri_mismatch」**: 手順 1-3 のリダイレクト URI を確かめる
 
 ## 料金の確認
@@ -120,3 +122,11 @@ sudo /opt/sns/deploy/aws/s3-tasks.sh restore sns-20261102-180000.dump  # 名前�
 S3 の代わりに、同じ使い方ができる S3Mock(`adobe/s3mock`)を Docker で動かして試せる(アプリの自動テスト `S3StorageApiTest` もこの方法)。
 `s3-tasks.sh` は、環境変数 `AWS_ENDPOINT_URL`(S3Mock の URL)・`AWS_ACCESS_KEY_ID`・`AWS_SECRET_ACCESS_KEY`・`S3_BUCKET` を渡すと、S3Mock に対して動く
 (Windows の Git Bash では `MSYS_NO_PATHCONV=1` も付ける)。
+
+## 公開したあとの確認(2026-11-03 に実施)
+公開したサーバーで、次を確かめた。
+- 正式な証明書の HTTPS(HTTP は HTTPS へ転送される)、Google ログイン、メールでの登録(Gmail 経由)
+- 管理者の設定(サーバーの中でデータベースの `users.role` を `ADMIN` にした)と、管理者画面
+- 画像つきの投稿が S3 の `uploads/` に保存され、ログインなしでは見られない(アプリ経由は 401、S3 に直接アクセスすると 403)
+- バックアップが `backups/`、ログが `logs/` に保存される。毎日のタイマーも登録済み
+- メモリ: 1GB のサーバーで、アプリ・データベース・HTTPS の入り口が動く(スワップ 2GB を用意)
