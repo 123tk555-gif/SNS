@@ -21,6 +21,10 @@ mkdir -p /usr/local/lib/docker/cli-plugins
 curl -fsSL "https://github.com/docker/compose/releases/download/v5.5.1/docker-compose-linux-$(uname -m)" \
   -o /usr/local/lib/docker/cli-plugins/docker-compose
 chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+# docker buildx(compose がアプリのイメージを作るときに必要。これも Amazon Linux の docker には入っていない)
+curl -fsSL "https://github.com/docker/buildx/releases/download/v0.38.0/buildx-v0.38.0.linux-$(uname -m | sed 's/aarch64/arm64/; s/x86_64/amd64/')" \
+  -o /usr/local/lib/docker/cli-plugins/docker-buildx
+chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx
 
 # アプリを取得(公開リポジトリの main)
 if [ ! -d /opt/sns ]; then
