@@ -2,7 +2,7 @@
 # 1) 画面を作る → 2) サーバーを作る(画面を中に入れる) → 3) 小さな実行用の入れ物に載せる
 
 # --- 1) 画面(React)のビルド。出力先は ../src/main/resources/static(vite.config.js) ---
-FROM node:24-slim AS web
+FROM node:25-slim AS web
 WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
