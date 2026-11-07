@@ -1,6 +1,6 @@
 package com.example.sns.post;
 
-import com.example.sns.hashtag.HashtagService;
+import com.example.sns.common.LikePatterns;
 import com.example.sns.hashtag.Hashtags;
 import com.example.sns.profile.Relations;
 import java.util.List;
@@ -35,7 +35,7 @@ class PostSearch {
                 .addValue("limit", limit);
         for (int i = 0; i < words.size(); i++) {
             sql.append(" and lower(normalize(p.text, NFKC)) like :w").append(i).append(" escape '\\'");
-            params.addValue("w" + i, "%" + HashtagService.escapeLike(Hashtags.normalize(words.get(i))) + "%");
+            params.addValue("w" + i, LikePatterns.contains(Hashtags.normalize(words.get(i))));
         }
         sql.append(" order by p.id desc limit :limit");
         return jdbc.queryForList(sql.toString(), params, Long.class);

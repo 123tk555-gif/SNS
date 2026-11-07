@@ -1,10 +1,12 @@
 package com.example.sns.admin;
 
+import com.example.sns.common.LikePatterns;
 import com.example.sns.realtime.StreamRegistry;
 import com.example.sns.security.SessionKiller;
 import com.example.sns.user.Role;
 import com.example.sns.user.User;
 import com.example.sns.user.UserRepository;
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -39,7 +41,10 @@ public class AdminUserService {
 
     @Transactional(readOnly = true)
     public Page<User> search(String q, int page) {
-        return users.searchForAdmin(q == null ? "" : q.strip(), PageRequest.of(Math.max(page, 0), PAGE_SIZE));
+        String word = q == null ? "" : q.strip().toLowerCase(Locale.ROOT);
+        // % と _ は、ただの文字として探す(LIKE の記号として扱わない)
+        String pattern = word.isEmpty() ? "" : LikePatterns.contains(word);
+        return users.searchForAdmin(pattern, PageRequest.of(Math.max(page, 0), PAGE_SIZE));
     }
 
     /** ユーザーごとの投稿数(削除済みは数えない)。一覧の 1 ページ分を 1 回の問い合わせで数える(N+1 にしない) */

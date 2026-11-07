@@ -1,5 +1,6 @@
 package com.example.sns.post;
 
+import com.example.sns.common.LikePatterns;
 import io.swagger.v3.oas.annotations.media.Schema;
 import com.example.sns.realtime.RealtimeEvents;
 import java.time.Instant;
@@ -51,8 +52,7 @@ public class AdminPostService {
     @Transactional(readOnly = true)
     public Page<AdminPost> search(String q, int page) {
         String word = q == null ? "" : q.strip();
-        String pattern = word.isEmpty() ? ""
-                : "%" + word.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%";
+        String pattern = word.isEmpty() ? "" : LikePatterns.contains(word);
         return posts.searchForAdmin(pattern, PageRequest.of(Math.max(page, 0), PAGE_SIZE)).map(AdminPost::from);
     }
 

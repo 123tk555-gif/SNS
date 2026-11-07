@@ -121,6 +121,17 @@ class AdminApiTest extends ApiTestSupport {
     }
 
     @Test
+    void ユーザーの検索で_アンダースコアとパーセントはふつうの文字として探す() throws Exception {
+        // ユーザーは admin_user と taro の 2 人。「_」を含むのは admin_user(とメールアドレス)だけ
+        admin.get("/api/admin/users?q=_").andExpect(jsonPath("$.total").value(1))
+                .andExpect(jsonPath("$.items[0].handle").value("admin_user"));
+        // 「%」を含むユーザーはいない
+        admin.get("/api/admin/users?q=%25").andExpect(jsonPath("$.total").value(0));
+        // ふつうの言葉の部分一致は、今までどおり
+        admin.get("/api/admin/users?q=TAR").andExpect(jsonPath("$.total").value(1));
+    }
+
+    @Test
     void 自分自身と管理者は停止できない() throws Exception {
         long adminId = ((Number) JsonPath.read(
                 admin.get("/api/auth/me").andReturn().getResponse().getContentAsString(), "$.id")).longValue();

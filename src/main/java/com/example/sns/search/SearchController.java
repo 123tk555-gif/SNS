@@ -12,26 +12,17 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.util.Arrays;
 import java.util.List;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 /** 検索・トレンド・ハッシュタグの投稿一覧の API(機能定義書 3.9・3.10)。 */
 @RestController
 @Tag(name = ApiTags.SEARCH)
 class SearchController {
-
-    static final int MAX_QUERY = 100;
-    /** 一度に探せる言葉の数(多すぎる言葉で、データベースに重い問い合わせをさせないため) */
-    static final int MAX_WORDS = 10;
-    static final String EMPTY_QUERY = "検索する言葉を入力してください";
-    static final String QUERY_TOO_LONG = "100文字以内で入力してください";
 
     private static final String Q = "検索する言葉。前後の空白を取り除いて 1〜100 文字。大文字・小文字、全角・半角の英数字は区別しない";
 
@@ -75,7 +66,7 @@ class SearchController {
             @Parameter(description = Q, example = "カフェ 勉強") @RequestParam(defaultValue = "") String q,
             @Parameter(description = "続きの読み込み。前の結果の `nextCursor`", example = "1234") @RequestParam(required = false) Long before,
             @Parameter(description = "件数(1〜50。省略すると 20)", example = "20") @RequestParam(required = false) Integer limit) {
-        List<String> words = Arrays.stream(validQuery(q).split("[\s　]+")).distinct().limit(MAX_WORDS).toList();
+        List<String> words = SearchQuery.words(q);
         return posts.search(words, me.id(), before, limit);
     }
 
@@ -87,7 +78,7 @@ class SearchController {
     @ApiResponse(responseCode = "400", description = "検索する言葉が空、または 100 文字を超える")
     UserResults searchUsers(@AuthenticationPrincipal LoginUser me,
             @Parameter(description = Q, example = "hana") @RequestParam(defaultValue = "") String q) {
-        return new UserResults(profiles.search(validQuery(q), me.id()));
+        return new UserResults(profiles.search(SearchQuery.valid(q), me.id()));
     }
 
     @GetMapping("/api/search/tags")
@@ -97,7 +88,7 @@ class SearchController {
     @ApiResponse(responseCode = "400", description = "検索する言葉が空、または 100 文字を超える")
     TagResults searchTags(
             @Parameter(description = Q, example = "spring") @RequestParam(defaultValue = "") String q) {
-        return new TagResults(hashtags.search(validQuery(q), 20));
+        return new TagResults(hashtags.search(SearchQuery.valid(q), 20));
     }
 
     // ---- トレンド(F-TREND-01〜03) ----
@@ -122,17 +113,5 @@ class SearchController {
             @Parameter(description = "続きの読み込み。前の結果の `nextCursor`", example = "1234") @RequestParam(required = false) Long before,
             @Parameter(description = "件数(1〜50。省略すると 20)", example = "20") @RequestParam(required = false) Integer limit) {
         return posts.byTag(name, me.id(), before, limit);
-    }
-
-    /** 前後の空白を取り除いて 1〜100 文字(見た目の 1 文字を 1 文字として数える) */
-    private static String validQuery(String q) {
-        String query = q.strip();
-        if (query.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, EMPTY_QUERY);
-        }
-        if (query.codePointCount(0, query.length()) > MAX_QUERY) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, QUERY_TOO_LONG);
-        }
-        return query;
     }
 }

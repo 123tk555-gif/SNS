@@ -1,5 +1,6 @@
 package com.example.sns.hashtag;
 
+import com.example.sns.common.LikePatterns;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Duration;
 import java.time.Instant;
@@ -57,14 +58,8 @@ public class HashtagService {
         if (word.isEmpty()) {
             return List.of();
         }
-        String escaped = escapeLike(word);
-        return hashtags.search("%" + escaped + "%", escaped + "%", limit).stream()
+        return hashtags.search(LikePatterns.contains(word), LikePatterns.prefix(word), limit).stream()
                 .map(row -> new TagCount((String) row[0], ((Number) row[1]).longValue()))
                 .toList();
-    }
-
-    /** LIKE の中で特別な意味を持つ文字(% と _)を、ただの文字として扱う */
-    public static String escapeLike(String text) {
-        return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 }

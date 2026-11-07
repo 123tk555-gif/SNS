@@ -1,7 +1,7 @@
 package com.example.sns.profile;
 
+import com.example.sns.common.LikePatterns;
 import io.swagger.v3.oas.annotations.media.Schema;
-import com.example.sns.hashtag.HashtagService;
 import com.example.sns.hashtag.Hashtags;
 import com.example.sns.notification.NotificationService;
 import com.example.sns.notification.NotificationType;
@@ -141,8 +141,7 @@ public class ProfileService {
         if (word.isEmpty()) {
             return List.of();
         }
-        String escaped = HashtagService.escapeLike(word);
-        return summaries(users.search(viewerId, "%" + escaped + "%", escaped + "%", 20), viewerId);
+        return summaries(users.search(viewerId, LikePatterns.contains(word), LikePatterns.prefix(word), 20), viewerId);
     }
 
     // ---- フォロー中・フォロワーの一覧(F-FOLLOW-02) ----

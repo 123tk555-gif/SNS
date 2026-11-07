@@ -9,7 +9,7 @@ X(旧 Twitter)のような、タイムライン型の SNS の Web アプリで�
 ![PostgreSQL 18](https://img.shields.io/badge/PostgreSQL-18-4169E1)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED)
 ![AWS](https://img.shields.io/badge/AWS-EC2_%2F_S3-FF9900)
-![Tests](https://img.shields.io/badge/tests-JUnit_101_%2B_E2E_217-brightgreen)
+![Tests](https://img.shields.io/badge/tests-JUnit_119_%2B_Vitest_19_%2B_E2E_217-brightgreen)
 
 ![ホーム画面](docs/images/home.png)
 
@@ -98,7 +98,7 @@ flowchart LR
 - **セキュリティ**: すべての API で、サーバー側でログイン・本人・管理者かを確かめる。CSRF 対策、BCrypt、Cookie の `HttpOnly`・`Secure`・`SameSite`、Content-Security-Policy、ログインの連続失敗のロック、画像は拡張子ではなく中身で形式を確かめる
 - **見やすさ**: 文字と背景の色の差を十分に取り(本文は WCAG の AAA 相当)、状態を色だけでなく文字や形でも示す。キーボードだけで操作でき、ダイアログを閉じるとキーボードの位置が元に戻る
 - **性能**: 一覧の取得で SQL の回数が件数に比例して増えない(N+1 問題)ことを、テストで SQL の回数を数えて確かめている。カーソル方式で、読み込み中に新着が増えても二重に出ない
-- **テスト**: サーバーの自動テスト 101 件と、実際のブラウザでの操作テスト 10 本・217 項目。公開前の点検として、HTML の埋め込み・長い文字列・二度押し・通信の失敗なども確かめている
+- **テスト**: サーバーの自動テスト 119 件(結合テストと単体テスト)、画面の単体テスト 19 件、実際のブラウザでの操作テスト 10 本・217 項目。プッシュのたびに CI で自動で流れる。公開前の点検として、HTML の埋め込み・長い文字列・二度押し・通信の失敗なども確かめている
 - **ドキュメント**: 要件定義書・機能定義書・画面仕様定義書・受け入れ確認表・API 仕様書をそろえ、実装と食い違ったら文書を直している
 
 ## API 仕様書(Swagger)
@@ -137,7 +137,8 @@ npm run dev
 
 | 何を | どうやって | 内容 |
 |---|---|---|
-| サーバー | `./mvnw test` | JUnit 101 件。本物の PostgreSQL を Testcontainers で動かす(Docker が必要)。S3 への保存は S3Mock で確かめる |
+| サーバー | `./mvnw test` | JUnit 119 件。**結合テスト**(本物の PostgreSQL を Testcontainers で動かす。Docker が必要。S3 への保存は S3Mock で確かめる)と、DB を使わない**単体テスト**(検索の言葉・LIKE の記号の打ち消し・画像の形式とパス・ハッシュタグ。1 クラス 0.01 秒ほど) |
+| 画面の単体テスト | `cd frontend && npm test` | Vitest 19 件。日時の表示・本文のリンク化・表示モード・お知らせの文 |
 | 画面のコード | `cd frontend && npm run lint` | oxlint |
 | 画面の操作 | `cd e2e && npm install && npm test` | Playwright で実際のブラウザ(Edge)を動かす。10 本・217 項目 |
 | 見やすさの点検 | `cd e2e && npm run audit` | 全画面を 375px/1280px・ライト/ダークで開き、横スクロール・名前のない部品・フォーカスの枠などを調べる |

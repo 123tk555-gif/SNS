@@ -42,7 +42,7 @@ jobs:
           retention-days: 7
 
   frontend:
-    name: 画面の lint・ビルド
+    name: 画面の lint・単体テスト・ビルド
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
@@ -58,6 +58,8 @@ jobs:
       - run: npm ci
       - name: lint(oxlint)
         run: npm run lint
+      - name: 単体テスト(Vitest)
+        run: npm test
       - name: ビルド
         run: npm run build
 

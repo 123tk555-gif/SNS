@@ -71,3 +71,8 @@ updates:
     cooldown:
       default-days: 14
     open-pull-requests-limit: 3
+    # 大きな版(Java 21 → 24、Node 24 → 25 など)は提案しない。Java 21・Node 24 は長期サポート版(LTS)なので、
+    # 次の LTS へは、計画を立てて手で上げる(LTS でない版に上がるのを防ぐ)
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

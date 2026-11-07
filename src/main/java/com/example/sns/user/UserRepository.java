@@ -43,14 +43,17 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> search(@Param("viewerId") long viewerId, @Param("pattern") String pattern,
             @Param("prefix") String prefix, @Param("limit") int limit);
 
-    /** 管理者画面のユーザー一覧: ユーザーID・表示名・メールアドレスの部分一致。登録の新しい順 */
+    /**
+     * 管理者画面のユーザー一覧: ユーザーID・表示名・メールアドレスの部分一致。登録の新しい順。
+     * pattern は LikePatterns.contains で作った、小文字の LIKE のパターン(% と _ は打ち消し済み)。空なら全員
+     */
     @Query("""
             select u from User u
-            where :q = ''
-               or lower(u.handle) like lower(concat('%', :q, '%'))
-               or lower(u.displayName) like lower(concat('%', :q, '%'))
-               or u.email like lower(concat('%', :q, '%'))
+            where :pattern = ''
+               or lower(u.handle) like :pattern escape '\\'
+               or lower(u.displayName) like :pattern escape '\\'
+               or u.email like :pattern escape '\\'
             order by u.createdAt desc, u.id desc
             """)
-    Page<User> searchForAdmin(@Param("q") String q, Pageable pageable);
+    Page<User> searchForAdmin(@Param("pattern") String pattern, Pageable pageable);
 }

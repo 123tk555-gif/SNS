@@ -138,10 +138,10 @@ class SearchApiTest extends ApiTestSupport {
     void 検索の言葉は1から100文字() throws Exception {
         taro.get("/api/search/posts?q=" + q("   "))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value(SearchController.EMPTY_QUERY));
+                .andExpect(jsonPath("$.message").value(SearchQuery.EMPTY_QUERY));
         taro.get("/api/search/posts?q=" + q("あ".repeat(101)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value(SearchController.QUERY_TOO_LONG));
+                .andExpect(jsonPath("$.message").value(SearchQuery.QUERY_TOO_LONG));
         taro.get("/api/search/users?q=").andExpect(status().isBadRequest());
     }
 
