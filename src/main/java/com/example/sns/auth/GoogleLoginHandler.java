@@ -1,5 +1,6 @@
 package com.example.sns.auth;
 
+import com.example.sns.logging.Events;
 import com.example.sns.security.SessionLogin;
 import com.example.sns.user.User;
 import jakarta.servlet.http.HttpServletRequest;
@@ -37,18 +38,23 @@ public class GoogleLoginHandler implements AuthenticationSuccessHandler {
         Optional<User> found = auth.findOrCreateGoogleUser(google.getSubject(), google.getEmail(),
                 Boolean.TRUE.equals(google.getEmailVerified()));
         if (found.isEmpty()) {
-            log.warn("Google 側でメールアドレスが確認されていないため、既存のユーザーに結びつけませんでした");
+            Events.warn(log, "auth.login_failed", "Google 側でメールアドレスが確認されていないため、既存のユーザーに結びつけませんでした")
+                    .addKeyValue("reason", "google_email_unverified").addKeyValue("method", "google").log();
             sessionLogin.logout(request);
             response.sendRedirect("/login?error=google");
             return;
         }
         User user = found.get();
         if (user.isSuspended()) {
+            Events.warn(log, "auth.login_failed", "ログインに失敗しました").addKeyValue("reason", "suspended")
+                    .addKeyValue("accountId", user.getId()).addKeyValue("method", "google").log();
             sessionLogin.logout(request);
             response.sendRedirect("/login?error=suspended");
             return;
         }
         sessionLogin.login(user, request, response);
+        Events.info(log, "auth.login", "ログインしました").addKeyValue("accountId", user.getId())
+                .addKeyValue("method", "google").log();
         response.sendRedirect(user.isOnboarded() ? "/" : "/onboarding");
     }
 }

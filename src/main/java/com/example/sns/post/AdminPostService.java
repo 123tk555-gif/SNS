@@ -1,8 +1,9 @@
 package com.example.sns.post;
 
 import com.example.sns.common.LikePatterns;
-import io.swagger.v3.oas.annotations.media.Schema;
+import com.example.sns.logging.Events;
 import com.example.sns.realtime.RealtimeEvents;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,7 +65,9 @@ public class AdminPostService {
         if (hidden) {
             events.publishEvent(new RealtimeEvents.PostRemoved(post.getId()));
         }
-        log.info("管理者 {} が投稿 {} を{}", adminId, postId, hidden ? "非表示にしました" : "表示に戻しました");
+        Events.info(log, hidden ? "admin.post_hidden" : "admin.post_unhidden",
+                hidden ? "管理者が投稿を非表示にしました" : "管理者が投稿を表示に戻しました")
+                .addKeyValue("adminId", adminId).addKeyValue("postId", postId).log();
         return AdminPost.from(post);
     }
 }

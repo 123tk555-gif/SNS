@@ -1,6 +1,7 @@
 package com.example.sns.security;
 
 import com.example.sns.common.ApiError;
+import com.example.sns.logging.RequestLogFilter;
 import com.example.sns.user.User;
 import com.example.sns.user.UserRepository;
 import jakarta.servlet.FilterChain;
@@ -47,6 +48,7 @@ class UserStateFilter extends OncePerRequestFilter {
                 sessionLogin.logout(request);
             } else {
                 User user = found.get();
+                RequestLogFilter.setUser(user.getId());
                 if (!user.isOnboarded() && needsOnboarding(request.getRequestURI())) {
                     response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                     response.setContentType("application/json;charset=UTF-8");

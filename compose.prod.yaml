@@ -3,6 +3,14 @@
 # 外に開くのは 80・443 番(Caddy)だけ。データベースとアプリには、外から直接つながらない(NF-SEC-10)。
 name: sns-prod
 
+# 画面への表示(docker logs)の保存の上限。1 つ 10MB で切り替え、3 つまで残す(各コンテナ 30MB まで。ディスクがいっぱいにならないように)。
+# アプリのログは、これとは別に JSON のファイル(logs/sns.log)にも残り、毎日 S3 に写す
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: postgres:18
@@ -21,6 +29,7 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    logging: *logging
 
   app:
     build: .
@@ -56,6 +65,7 @@ services:
         condition: service_healthy
     # ports は書かない(Caddy からだけ、コンテナのネットワークの中でつながる)
     restart: unless-stopped
+    logging: *logging
 
   caddy:
     image: caddy:2
@@ -71,6 +81,7 @@ services:
     depends_on:
       - app
     restart: unless-stopped
+    logging: *logging
 
 volumes:
   db-data:

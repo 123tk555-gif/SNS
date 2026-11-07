@@ -3,6 +3,7 @@ package com.example.sns.auth;
 import com.example.sns.apidoc.ApiTags;
 import com.example.sns.notification.NotificationService;
 import com.example.sns.security.GoogleSettings;
+import com.example.sns.logging.Events;
 import com.example.sns.security.LoginUser;
 import com.example.sns.security.SessionLogin;
 import com.example.sns.user.User;
@@ -17,6 +18,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -31,6 +34,8 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 @Tag(name = ApiTags.AUTH)
 class AuthController {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
     @Schema(description = "画面の設定")
     record ConfigResponse(
@@ -135,7 +140,10 @@ class AuthController {
     @Operation(summary = "ログアウト",
             description = "セッションを消す(リアルタイム配信の接続も切れる)。ログインしていなくても、エラーにはならない")
     @ApiResponse(responseCode = "204", description = "ログアウトした")
-    ResponseEntity<Void> logout(HttpServletRequest httpRequest) {
+    ResponseEntity<Void> logout(@AuthenticationPrincipal LoginUser me, HttpServletRequest httpRequest) {
+        if (me != null) {
+            Events.info(log, "auth.logout", "ログアウトしました").addKeyValue("accountId", me.id()).log();
+        }
         sessionLogin.logout(httpRequest);
         return ResponseEntity.noContent().build();
     }

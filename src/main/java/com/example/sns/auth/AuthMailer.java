@@ -1,5 +1,6 @@
 package com.example.sns.auth;
 
+import com.example.sns.logging.Events;
 import com.example.sns.user.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,7 +59,8 @@ class AuthMailer {
         try {
             sender.send(message);
         } catch (MailException e) {
-            log.error("メールを送れませんでした(ユーザー {})", user.getId(), e);
+            Events.error(log, "mail.failed", "メールを送れませんでした").addKeyValue("accountId", user.getId())
+                    .addKeyValue("mail.subject", subject).setCause(e).log();
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "メールを送れませんでした。しばらくしてからもう一度お試しください");
         }

@@ -1,6 +1,7 @@
 package com.example.sns.admin;
 
 import com.example.sns.common.LikePatterns;
+import com.example.sns.logging.Events;
 import com.example.sns.realtime.StreamRegistry;
 import com.example.sns.security.SessionKiller;
 import com.example.sns.user.Role;
@@ -74,7 +75,9 @@ public class AdminUserService {
             sessionKiller.killAll(user.getId(), null);
             streams.disconnect(user.getId());
         }
-        log.info("管理者 {} がユーザー {} を{}", adminId, userId, suspended ? "利用停止にしました" : "利用停止から戻しました");
+        Events.info(log, suspended ? "admin.user_suspended" : "admin.user_unsuspended",
+                suspended ? "管理者がユーザーを利用停止にしました" : "管理者がユーザーを利用停止から戻しました")
+                .addKeyValue("adminId", adminId).addKeyValue("accountId", userId).log();
         return user;
     }
 }

@@ -101,6 +101,23 @@ sudo /opt/sns/deploy/aws/s3-tasks.sh sync-logs    # その場でログを写す
 systemctl list-timers 'sns-*'                     # 次に動く時刻
 ```
 
+### ログの見方
+アプリのログ(`logs/sns.log`)は 1 行 1 件の JSON です(項目の一覧は機能定義書の「1.9 ログ」)。サーバーの中で、`jq` を使って項目で絞り込めます。
+```bash
+sudo dnf install -y jq                            # 最初の 1 回だけ
+cd /opt/sns
+alias snslog='sudo docker compose -f compose.prod.yaml exec -T app cat logs/sns.log'
+
+snslog | jq -c 'select(.log.level == "ERROR")'                          # エラーだけ
+snslog | jq -c 'select(.requestId == "933f0259d3c5")'                   # 利用者が見た「エラー番号」から、そのときのログ全部
+snslog | jq -r 'select(.event.action == "auth.login_failed") | [."@timestamp", .reason, .accountId] | @tsv'  # ログインの失敗
+snslog | jq -r 'select(.event.action | startswith("admin.")) | [."@timestamp", .event.action, .adminId] | @tsv'  # 管理者の操作
+snslog | jq -r 'select(.event.duration_ms > 1000) | .message'          # 1 秒より遅かったリクエスト
+snslog | jq -r 'select(.http.response.status_code >= 500) | .message'  # 5xx を返したリクエスト
+```
+人が読む形のログは `sudo docker compose -f compose.prod.yaml logs --tail 100 app`(コンテナごとに 30MB まで残る)。
+S3 の `logs/` に写したログも同じ JSON なので、手元に落として同じように調べられます。
+
 ### データベースを戻すとき
 ```bash
 sudo /opt/sns/deploy/aws/s3-tasks.sh restore sns-20261102-180000.dump  # 名前を省くと一番新しいもの

@@ -1,5 +1,6 @@
 package com.example.sns.security;
 
+import com.example.sns.logging.RequestLogFilter;
 import com.example.sns.user.User;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -28,6 +29,7 @@ public class SessionLogin {
         context.setAuthentication(LoginUser.authentication(user));
         SecurityContextHolder.setContext(context);
         repository.saveContext(context, request, response);
+        RequestLogFilter.setUser(user.getId());
     }
 
     public void logout(HttpServletRequest request) {

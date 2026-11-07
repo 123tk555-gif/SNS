@@ -1,5 +1,6 @@
 package com.example.sns.auth;
 
+import com.example.sns.logging.Events;
 import com.example.sns.security.SessionKiller;
 import com.example.sns.user.User;
 import com.example.sns.user.UserRepository;
@@ -9,6 +10,8 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -20,6 +23,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 @Transactional
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     static final Duration VERIFY_VALID_FOR = Duration.ofHours(24);
     static final Duration RESET_VALID_FOR = Duration.ofHours(1);
@@ -78,6 +83,9 @@ public class AuthService {
         }
         User user = users.save(User.withPassword(normalized, passwordEncoder.encode(password)));
         mailer.sendVerification(user, tokens.issue(user, EmailToken.Purpose.VERIFY_EMAIL, VERIFY_VALID_FOR));
+        // メールを送れたあとに残す(送れなければ、登録ごと取り消される)
+        Events.info(log, "auth.signup", "アカウントを登録しました").addKeyValue("accountId", user.getId())
+                .addKeyValue("method", "password").log();
     }
 
     public User verifyEmail(String token) {
@@ -86,6 +94,7 @@ public class AuthService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, SUSPENDED);
         }
         user.verifyEmail();
+        Events.info(log, "auth.email_verified", "メールアドレスを確認しました").addKeyValue("accountId", user.getId()).log();
         return user;
     }
 
@@ -110,22 +119,43 @@ public class AuthService {
         Instant now = Instant.now();
         Optional<User> found = users.findByEmail(User.normalizeEmail(email));
         if (found.isPresent() && found.get().isLocked(now)) {
+            loginFailed(found, "locked");
             throw new ResponseStatusException(HttpStatus.LOCKED, LOCKED);
         }
         if (!passwordMatches(found, password)) {
-            found.ifPresent(user -> user.recordFailedLogin(now));
+            found.ifPresent(user -> {
+                user.recordFailedLogin(now);
+                if (user.isLocked(now)) {
+                    Events.warn(log, "auth.locked", "ログインの失敗が続いたため、ロックしました")
+                            .addKeyValue("accountId", user.getId()).log();
+                }
+            });
+            loginFailed(found, "bad_credentials");
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, BAD_CREDENTIALS);
         }
         // パスワードが合っているときだけ、確認前・停止中であることを伝える
         User user = found.get();
         if (!user.isEmailVerified()) {
+            loginFailed(found, "not_verified");
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, NOT_VERIFIED);
         }
         if (user.isSuspended()) {
+            loginFailed(found, "suspended");
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, SUSPENDED);
         }
         user.recordSuccessfulLogin();
+        Events.info(log, "auth.login", "ログインしました").addKeyValue("accountId", user.getId())
+                .addKeyValue("method", "password").log();
         return user;
+    }
+
+    /** ログインの失敗。メールアドレスは残さず、登録済みのときだけアカウントの ID を残す */
+    private static void loginFailed(Optional<User> found, String reason) {
+        var event = Events.warn(log, "auth.login_failed", "ログインに失敗しました").addKeyValue("reason", reason);
+        if (found.isPresent()) {
+            event = event.addKeyValue("accountId", found.get().getId());
+        }
+        event.log();
     }
 
     private boolean passwordMatches(Optional<User> found, String password) {
@@ -164,7 +194,10 @@ public class AuthService {
             }
             return Optional.of(user);
         }
-        return Optional.of(users.save(User.withGoogle(normalized, googleSub)));
+        User created = users.save(User.withGoogle(normalized, googleSub));
+        Events.info(log, "auth.signup", "アカウントを登録しました").addKeyValue("accountId", created.getId())
+                .addKeyValue("method", "google").log();
+        return Optional.of(created);
     }
 
     // ---- パスワード再設定(F-AUTH-04) ----
@@ -174,8 +207,11 @@ public class AuthService {
         users.findByEmail(User.normalizeEmail(email))
                 .filter(user -> user.getPasswordHash() != null)
                 .filter(user -> !tokens.issuedWithin(user, EmailToken.Purpose.RESET_PASSWORD, RESEND_INTERVAL))
-                .ifPresent(user -> mailer.sendPasswordReset(user,
-                        tokens.issue(user, EmailToken.Purpose.RESET_PASSWORD, RESET_VALID_FOR)));
+                .ifPresent(user -> {
+                    mailer.sendPasswordReset(user, tokens.issue(user, EmailToken.Purpose.RESET_PASSWORD, RESET_VALID_FOR));
+                    Events.info(log, "auth.password_reset_requested", "パスワードの再設定のメールを送りました")
+                            .addKeyValue("accountId", user.getId()).log();
+                });
     }
 
     /** 新しいパスワードにし、そのユーザーのセッションを(今の画面以外)すべて消す */
@@ -184,6 +220,7 @@ public class AuthService {
         User user = tokens.consume(token, EmailToken.Purpose.RESET_PASSWORD);
         user.changePassword(passwordEncoder.encode(password));
         sessionKiller.killAll(user.getId(), currentSessionId);
+        Events.info(log, "auth.password_reset", "パスワードを再設定しました").addKeyValue("accountId", user.getId()).log();
     }
 
     // ---- 初期設定(F-AUTH-05) ----
@@ -206,6 +243,7 @@ public class AuthService {
             // 確かめてから保存するまでの間に、同じユーザーIDを他の人が使った
             throw new ResponseStatusException(HttpStatus.CONFLICT, HANDLE_TAKEN);
         }
+        Events.info(log, "auth.onboarded", "初期設定を完了しました").addKeyValue("accountId", user.getId()).log();
         return user;
     }
 
