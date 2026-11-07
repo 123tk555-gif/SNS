@@ -26,7 +26,7 @@ async function latestToken(to, path) {
   throw new Error('メールが届きません');
 }
 
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL ?? 'msedge' });
 const page = await browser.newPage({ ignoreHTTPSErrors, viewport: { width: 1280, height: 900 } });
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });

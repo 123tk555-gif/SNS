@@ -11,7 +11,7 @@ const bigPng = `${out}/big.png`;
 writeFileSync(bigPng, png(3000, 2000));
 writeFileSync(`${out}/fake.png`, 'not an image');
 
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL ?? 'msedge' });
 const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
 const page = await context.newPage();
 page.on('pageerror', (e) => errors.push(e.message));

@@ -9,7 +9,7 @@ import { out } from './lib.mjs';
 const base = process.argv[2] ?? 'http://localhost:5173';
 const problems = [];
 const note = (screen, msg) => problems.push(`${screen}: ${msg}`);
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL ?? 'msedge' });
 
 async function context(width, scheme) {
   const ctx = await browser.newContext({ viewport: { width, height: width < 500 ? 812 : 900 }, colorScheme: scheme });

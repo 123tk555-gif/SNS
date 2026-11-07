@@ -2,6 +2,7 @@
 
 X(旧 Twitter)のような、タイムライン型の SNS の Web アプリです。学習・ポートフォリオとして、要件定義から設計・実装・テスト・AWS への公開まで、ひと通り自分で作りました。
 
+[![CI](https://github.com/123tk555-gif/SNS/actions/workflows/ci.yml/badge.svg)](https://github.com/123tk555-gif/SNS/actions/workflows/ci.yml)
 ![Java 21](https://img.shields.io/badge/Java-21-007396)
 ![Spring Boot 4.1](https://img.shields.io/badge/Spring_Boot-4.1-6DB33F)
 ![React 19](https://img.shields.io/badge/React-19-61DAFB)
@@ -142,6 +143,10 @@ npm run dev
 | 見やすさの点検 | `cd e2e && npm run audit` | 全画面を 375px/1280px・ライト/ダークで開き、横スクロール・名前のない部品・フォーカスの枠などを調べる |
 
 画面の操作テストは、データベース・サーバー(8080)・画面(5173)が動いていて、テストデータが入っている状態で流します。作ったデータは、テストの前後に消します。
+
+**CI(GitHub Actions)**: GitHub にプッシュするたびに、サーバーのテストと画面の lint・ビルドが自動で流れます。main へのプッシュでは、画面の操作テストと公開用のイメージの作成も流れます(`.github/workflows/ci.yml`)。結果は冒頭のバッジと、GitHub の「Actions」で見られます。
+
+**Dependabot**: 使っている部品(Maven・npm・GitHub Actions・Docker のイメージ)の新しい版と、既知の脆弱性を、毎週月曜に確かめて PR を作ります。出たばかりの版は 14 日待ってから提案します(`.github/dependabot.yml`)。
 
 ## 公開(AWS)
 

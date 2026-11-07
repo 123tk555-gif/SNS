@@ -9,7 +9,7 @@ const swagger = process.env.SWAGGER_BASE ?? (base.includes(':5173') ? 'http://lo
 const results = [];
 const errors = [];
 const check = (name, ok, extra = '') => results.push(`${ok ? 'OK ' : 'NG '} ${name}${extra ? ` (${extra})` : ''}`);
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL ?? 'msedge' });
 const page = await (await browser.newContext({ viewport: { width: 1280, height: 900 }, ignoreHTTPSErrors: true })).newPage();
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => {

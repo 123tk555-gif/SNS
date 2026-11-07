@@ -10,7 +10,7 @@ const results = [];
 const errors = [];
 const check = (name, ok, extra = '') => results.push(`${ok ? 'OK ' : 'NG '} ${name}${extra ? ` (${extra})` : ''}`);
 const stamp = String(Date.now()).slice(-6);
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL ?? 'msedge' });
 
 async function token(to) {
   for (let i = 0; i < 30; i += 1) {

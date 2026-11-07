@@ -1,0 +1,122 @@
+# CI: プッシュと PR のたびに、テスト・lint・ビルドを自動で流す(公開リポジトリなので無料)
+#   backend  … サーバーの自動テスト(JUnit。Testcontainers で本物の PostgreSQL を動かす)
+#   frontend … 画面の lint・単体テスト・ビルド
+#   e2e      … 実際のブラウザでの操作テスト(main へのプッシュと手動実行のとき。時間がかかるため)
+#   docker   … 公開用のイメージが作れるか(main へのプッシュと手動実行のとき)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 同じブランチで新しく動いたら、古い方は止める(待ち時間と無駄を減らす)
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: サーバーのテスト
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-java@v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: テスト(JUnit)
+        run: ./mvnw -B -ntp test
+      - name: 失敗したときの結果を保存
+        if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          retention-days: 7
+
+  frontend:
+    name: 画面の lint・ビルド
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: lint(oxlint)
+        run: npm run lint
+      - name: ビルド
+        run: npm run build
+
+  e2e:
+    name: 画面の操作テスト(E2E)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    needs: [backend, frontend]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-java@v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            e2e/package-lock.json
+      - name: 日本語のフォント(画面の文字の幅を、手元と同じにする)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq fonts-noto-cjk
+      - name: データベースとメール確認用サーバーを起動
+        run: docker compose up -d --wait
+      - name: 画面をビルド(サーバーが配信する)
+        working-directory: frontend
+        run: npm ci && npm run build
+      - name: サーバーを、テストデータ入りで起動
+        run: |
+          nohup ./mvnw -B -ntp spring-boot:run -Dspring-boot.run.profiles=seed > server.log 2>&1 &
+          for _ in $(seq 1 120); do
+            curl -sf http://localhost:8080/api/auth/config > /dev/null && echo "サーバーが起動しました" && exit 0
+            sleep 2
+          done
+          echo "サーバーが起動しません"; tail -n 80 server.log; exit 1
+      - name: 操作テスト(Playwright。ブラウザは Microsoft Edge)
+        working-directory: e2e
+        env:
+          BASE_URL: http://localhost:8080
+        run: npm ci && npm test
+      - name: 失敗したときのスクリーンショットとログを保存
+        if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: e2e-output
+          path: |
+            e2e/output/
+            server.log
+          retention-days: 7
+
+  docker:
+    name: 公開用のイメージ
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: イメージを作る(公開はしない)
+        run: docker build -t sns-app:ci .

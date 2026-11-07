@@ -7,7 +7,7 @@ const errors = [];
 const check = (name, ok, extra = '') => results.push(`${ok ? 'OK ' : 'NG '} ${name}${extra ? ` (${extra})` : ''}`);
 const stamp = Date.now();
 
-const browser = await chromium.launch({ channel: 'msedge' });
+const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL ?? 'msedge' });
 
 async function loginAs(email, viewport = { width: 1280, height: 900 }) {
   const context = await browser.newContext({ viewport });
