@@ -20,7 +20,7 @@ COPY --from=web /build/src/main/resources/static ./src/main/resources/static
 RUN mvn -q -B -DskipTests package && mv target/*.jar app.jar
 
 # --- 3) 実行用 ---
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:24-jre
 # 管理者でない専用のユーザーで動かす(破られたときの被害を小さくする)
 RUN useradd --system --create-home --uid 10001 sns \
     && mkdir -p /data/uploads /app/logs \
