@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router'
 import { api } from '../api.js'
 import { useAuth } from '../auth.jsx'
@@ -6,7 +6,8 @@ import Composer, { POST_CREATED } from '../components/Composer.jsx'
 import Layout from '../components/Layout.jsx'
 import PostList from '../components/PostList.jsx'
 import { useNotice } from '../notice.jsx'
-import { STREAM_POST_CREATED, STREAM_RECONNECTED } from '../realtime.jsx'
+import { STREAM_POST_CREATED, STREAM_POST_DELETED, STREAM_RECONNECTED } from '../realtime.jsx'
+import { RELATION_CHANGED } from '../relations.js'
 import { useTimeline } from '../useTimeline.js'
 
 /** S-05 ホーム。「すべて」「フォロー中」のタイムラインと投稿欄 */
@@ -37,24 +38,41 @@ export default function HomePage() {
   )
 }
 
+
 /** これより下までスクロールしていたら「読んでいる途中」とみなす */
-const SCROLLED = 200
+const SCROLLED = 100
 
 /**
  * tab: all(すべて。F-TL-01)/ following(自分とフォローしている人の投稿。F-TL-02)。
- * 新着は再読み込みしなくても先頭に足す(F-TL-04)。下を読んでいる途中なら、見ている投稿が動かないように
- * スクロールの位置を合わせ、「↑ 新しい投稿 ○件」ボタンを出す(F-TL-05)
+ * ほかの人の新着(SSE)は、すぐには足さずにためておき、上部の「新しい投稿が ○ 件あります」ボタンで知らせる。
+ * 押すと、ためた投稿を先頭に足して一番上へ移る(F-TL-04, F-TL-05)。読んでいる途中で一覧が動かない。
+ * 自分の投稿は、すぐに先頭に足す
  */
 function Timeline({ tab }) {
   const { user } = useAuth()
   const timeline = useTimeline(`/api/timeline?tab=${tab}`, { posts: true })
   const { prepend, retry, posts } = timeline
-  const [newCount, setNewCount] = useState(0)
-  const keepPosition = useRef(null) // 足す前のページの高さ(足したあとで、その差だけスクロールする)
-  const topId = useRef(null)
-  topId.current = posts[0]?.id ?? null
+  // まだ表示していない新着(新しいものが先頭)と、多すぎて取り込めなかったか(押したら読み込み直す)
+  const [pending, setPending] = useState([])
+  const [overflow, setOverflow] = useState(false)
+  // ボタンを出したときに一番上を見ていたら、ボタンの分の場所を空けて出す(重ねると 1 件目が隠れる)。
+  // 読んでいる途中なら、場所を空けずに画面の上部に浮かせる(見ている投稿を動かさない)
+  const [inline, setInline] = useState(false)
+  const shown = useRef(false)
+  shown.current = pending.length > 0 || overflow
+  // 手元にある一番新しい投稿の ID(つなぎ直したときに、これより新しいものを取りに行く)
+  const newestId = useRef(null)
+  newestId.current = pending[0]?.id ?? posts[0]?.id ?? null
 
-  // 自分が投稿したら(ダイアログからの投稿も)、先頭に足す。返信はタイムラインに出さない(F-TL-06)
+  const addPending = useCallback((...items) => {
+    if (!shown.current) setInline(window.scrollY < SCROLLED)
+    setPending((current) => {
+      const known = new Set(current.map((p) => p.id))
+      return [...items.filter((p) => !known.has(p.id)), ...current]
+    })
+  }, [])
+
+  // 自分が投稿したら(ダイアログからの投稿も)、すぐ先頭に足す。返信はタイムラインに出さない(F-TL-06)
   useEffect(() => {
     const onCreated = (e) => {
       if (!e.detail.replyTo) prepend(e.detail)
@@ -63,29 +81,44 @@ function Timeline({ tab }) {
     return () => window.removeEventListener(POST_CREATED, onCreated)
   }, [prepend])
 
-  // ほかの人の新しい投稿(SSE)
+  // ほかの人の新しい投稿(SSE)はためる(SSE は投稿者本人には届かない)
   useEffect(() => {
     const onStream = (e) => {
       const { post, followedByMe } = e.detail
-      if (tab === 'following' && !followedByMe && post.author.id !== user.id) return
-      if (window.scrollY > SCROLLED) {
-        keepPosition.current = document.documentElement.scrollHeight
-        setNewCount((n) => n + 1)
-      }
-      prepend({ ...post, isNew: true })
+      if (tab === 'following' && !followedByMe) return
+      addPending({ ...post, isNew: true })
     }
     window.addEventListener(STREAM_POST_CREATED, onStream)
     return () => window.removeEventListener(STREAM_POST_CREATED, onStream)
-  }, [tab, user.id, prepend])
+  }, [tab, addPending])
 
-  // つなぎ直したら、その間に増えた投稿を取り込む(多すぎるときは読み込み直す。機能定義書 3.5)
+  // ためている間に削除・非表示にされた投稿と、ミュート・ブロックした人の投稿は、ためた分からも外す
+  useEffect(() => {
+    const onDeleted = (e) => setPending((current) => current.filter((p) => p.id !== e.detail.id))
+    const onRelation = (e) => {
+      if (e.detail.on) setPending((current) => current.filter((p) => p.author.id !== e.detail.userId))
+    }
+    window.addEventListener(STREAM_POST_DELETED, onDeleted)
+    window.addEventListener(RELATION_CHANGED, onRelation)
+    return () => {
+      window.removeEventListener(STREAM_POST_DELETED, onDeleted)
+      window.removeEventListener(RELATION_CHANGED, onRelation)
+    }
+  }, [])
+
+  // つなぎ直したら、その間に増えた投稿もためる(多すぎるときは、押したときに読み込み直す。機能定義書 3.5)
   useEffect(() => {
     const onReconnected = async () => {
-      if (topId.current === null) return retry()
+      if (newestId.current === null) return retry()
       try {
-        const page = await api(`/api/timeline?tab=${tab}&after=${topId.current}`)
-        if (page.nextCursor !== null) return retry()
-        if (page.items.length) prepend(...page.items.toReversed().map((p) => ({ ...p, isNew: true })))
+        const page = await api(`/api/timeline?tab=${tab}&after=${newestId.current}`)
+        if (page.nextCursor !== null) {
+          if (!shown.current) setInline(window.scrollY < SCROLLED)
+          return setOverflow(true)
+        }
+        const others = page.items.filter((p) => p.author.id !== user.id)
+        prepend(...page.items.filter((p) => p.author.id === user.id).toReversed())
+        if (others.length) addPending(...others.toReversed().map((p) => ({ ...p, isNew: true })))
       } catch {
         // 次につなぎ直したときに、もう一度取り込む
       }
@@ -93,31 +126,20 @@ function Timeline({ tab }) {
     }
     window.addEventListener(STREAM_RECONNECTED, onReconnected)
     return () => window.removeEventListener(STREAM_RECONNECTED, onReconnected)
-  }, [tab, prepend, retry])
+  }, [tab, user.id, prepend, retry, addPending])
 
-  // 新着を足したあと、足した分だけスクロールの位置を下げる(画面に描く前に行うので、見ている投稿は動かない)
-  useLayoutEffect(() => {
-    if (keepPosition.current !== null) {
-      window.scrollBy(0, document.documentElement.scrollHeight - keepPosition.current)
-      keepPosition.current = null
+  function showNew() {
+    if (overflow) {
+      retry()
+    } else {
+      prepend(...pending)
     }
-  }, [posts])
-
-  // 一番上まで戻ったら「新しい投稿 ○件」を消す
-  useEffect(() => {
-    if (!newCount) return undefined
-    const onScroll = () => {
-      if (window.scrollY < 100) setNewCount(0)
-    }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [newCount])
-
-  function scrollToTop() {
+    setPending([])
+    setOverflow(false)
     const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
     window.scrollTo({ top: 0, behavior: smooth ? 'smooth' : 'auto' })
-    setNewCount(0)
-    document.querySelector('main article.card a.name')?.focus({ preventScroll: true })
+    // キーボードで使う人のために、先頭の投稿へ移る(ボタンは消えるため)
+    requestAnimationFrame(() => document.querySelector('main article.card a.name')?.focus({ preventScroll: true }))
   }
 
   const empty = tab === 'all' ? (
@@ -133,10 +155,10 @@ function Timeline({ tab }) {
 
   return (
     <>
-      {newCount > 0 && (
-        <div className="newbar">
-          <button className="btn btn-primary" type="button" onClick={scrollToTop}>
-            ↑ 新しい投稿 {newCount}件
+      {(pending.length > 0 || overflow) && (
+        <div className={`newbar${inline ? ' inline' : ''}`}>
+          <button className="btn btn-primary" type="button" onClick={showNew}>
+            ↑ {overflow ? '新しい投稿があります' : `新しい投稿が ${pending.length} 件あります`}
           </button>
         </div>
       )}

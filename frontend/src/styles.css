@@ -576,6 +576,8 @@ h1[tabindex="-1"]:focus { outline: none; }
   overflow: visible;
 }
 .newbar .btn { box-shadow: var(--shadow); }
+/* 一番上を見ていたときは、ボタンの分の場所を空ける(1 件目に重ねない) */
+.newbar.inline { height: auto; padding: 10px 0; }
 
 /* ---- ユーザーの行 ---- */
 .user-row {

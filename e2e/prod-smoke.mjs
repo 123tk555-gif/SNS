@@ -69,7 +69,10 @@ await a.page.fill('#alt-home-0', '確認用の画像');
 await a.page.click('form.composer button[type="submit"]');
 await a.page.waitForSelector(`article.card:has-text("公開構成の確認 ${stamp}")`);
 check('画像つきの投稿ができる', await a.page.locator('article.card .imgs img').first().isVisible());
-await b.page.waitForSelector(`article.card:has-text("公開構成の確認 ${stamp}")`, { timeout: 10000 });
+// 届くと「新しい投稿が ○ 件あります」が出て、押すと表示される
+await b.page.waitForSelector('.newbar button', { timeout: 10000 });
+await b.page.click('.newbar button');
+await b.page.waitForSelector(`article.card:has-text("公開構成の確認 ${stamp}")`, { timeout: 5000 });
 check('別のブラウザに、再読み込みなしで届く(SSE)', true);
 // 画像は読み込みに少し時間がかかることがあるので、最大 5 秒待つ。あわせて、/media の応答も直接確かめる
 const loaded = await a.page.waitForFunction(() => [...document.querySelectorAll('article.card .imgs img')].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 5000 }).then(() => true, () => false);
