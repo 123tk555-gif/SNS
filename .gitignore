@@ -36,3 +36,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# 負荷テストの 1 件ずつの記録
+load/results/

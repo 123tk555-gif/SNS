@@ -1,0 +1,44 @@
+# 負荷テスト用の追加設定。公開用の compose.prod.yaml に重ねて、手元で動かす(本番の AWS には流さない)。
+# 使い方は load/README.md。
+#
+# ・本番のサーバー(t4g.micro: 2 vCPU・メモリ 1GB)に近づける。CPU は、DB・アプリ・Caddy の 3 つが
+#   同じ 2 コア(0 番と 1 番)だけを分け合う(本番と同じく、どれかが空いていればほかが使える)。
+#   k6 はそれ以外のコアで動くので、測る側が測られる側の CPU を取らない。メモリは 3 つで合わせて 920MB まで
+# ・アプリはテストデータ入り(seed)で起動する(起動のたびにデータを入れ直す)
+# ・入り口は Caddy の HTTPS。名前は sns.localhost(Caddy が自分で証明書を作る)
+# ・k6 は同じネットワークの中から https://sns.localhost に流す
+services:
+  db:
+    cpuset: "0,1"
+    mem_limit: 256m
+
+  app:
+    environment:
+      SPRING_PROFILES_ACTIVE: seed
+    cpuset: "0,1"
+    mem_limit: 600m
+
+  caddy:
+    cpuset: "0,1"
+    mem_limit: 64m
+    # 手元の 80・443 番は使わない。このパソコンからだけ 8443 番でつながる(テストの前の確認用)
+    ports: !override
+      - "127.0.0.1:8443:443"
+    networks:
+      default:
+        aliases: [sns.localhost]
+
+  k6:
+    image: grafana/k6:2.3.0
+    profiles: [k6]
+    # 測られる側(0 番と 1 番)以外のコア。4 コアの PC なら "2,3" にする
+    cpuset: "2-7"
+    environment:
+      BASE_URL: https://sns.localhost
+    volumes:
+      - ./load:/scripts:ro
+      # 1 件ずつの記録(CSV)の置き場所。git に入れない
+      - ./load/results:/results
+    command: ["run", "/scripts/timeline.js"]
+    depends_on:
+      - caddy
