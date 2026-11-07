@@ -25,3 +25,14 @@ export function fixture(name, width, height) {
   writeFileSync(path, png(width, height));
   return path;
 }
+
+/**
+ * タイムラインなどのタブを押し、そのタブの一覧が出るまで待つ。
+ * 押した直後は前のタブの一覧がまだ見えていることがあるので(遅い PC や CI)、
+ * タブが選ばれた状態(aria-current)に変わってから、新しい一覧(投稿か「ありません」)を待つ
+ */
+export async function openTab(page, label) {
+  await page.click(`a.tab:has-text("${label}")`);
+  await page.waitForSelector(`a.tab[aria-current="page"]:has-text("${label}")`);
+  await page.waitForSelector('main .empty, main article.card');
+}

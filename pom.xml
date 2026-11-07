@@ -59,6 +59,15 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-session-jdbc</artifactId>
 		</dependency>
+		<!-- テーブルの変更を、番号付きの SQL(src/main/resources/db/migration)で管理する。版は Spring Boot が決める -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-flyway</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+		</dependency>
 		<!-- 画像を Amazon S3 に保存する(公開用)。HTTP の通信は Java 標準の部品を使い、使わない部品(Netty・Apache)は入れない -->
 		<dependency>
 			<groupId>software.amazon.awssdk</groupId>

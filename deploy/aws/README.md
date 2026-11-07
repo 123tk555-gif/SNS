@@ -83,6 +83,8 @@ aws sso login --profile taskboard
 .\start.ps1 -Update   # GitHub の最新に更新して起動(10〜20 分)
 ```
 
+**テーブルを変える更新**(`src/main/resources/db/migration/` に `V2__〜.sql` などを足した更新)は、アプリが起動するときに Flyway が本番の DB に SQL を流す。元に戻せないので、`-Update` の前に `.\start.ps1` で起動し、下の `s3-tasks.sh backup` でバックアップをとってから更新する。うまくいかなければ `s3-tasks.sh restore` で戻せる。
+
 ## S3(画像・バックアップ・ログ)
 
 | 何を | S3 の場所 | いつ | どのくらい残すか |

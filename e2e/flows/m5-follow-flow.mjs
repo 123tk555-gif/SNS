@@ -1,7 +1,7 @@
 import { chromium } from 'playwright-core';
 
 const base = process.argv[2] ?? 'http://localhost:5173';
-import { out } from '../lib.mjs';
+import { openTab, out } from '../lib.mjs';
 const results = [];
 const errors = [];
 const check = (name, ok, extra = '') => results.push(`${ok ? 'OK ' : 'NG '} ${name}${extra ? ` (${extra})` : ''}`);
@@ -33,12 +33,11 @@ await postAs(ken, `M5 ${stamp} けんの投稿`);
 
 const taro = await loginAs('taro@example.com');
 // まだ誰もフォローしていない:「フォロー中」には自分の投稿だけ(今はなし)
-await taro.click('a.tab:has-text("フォロー中")');
-await taro.waitForSelector('main .empty, main article.card');
+await openTab(taro, 'フォロー中');
 check('フォロー前の「フォロー中」に他人の投稿は出ない', !(await taro.content()).includes(`${stamp} はなこの投稿`));
 
 // 「すべて」から、はなこの名前を押してプロフィールへ
-await taro.click('a.tab:has-text("すべて")');
+await openTab(taro, 'すべて');
 const hanakoCard = taro.locator(`article.card:has-text("${stamp} はなこの投稿")`);
 await hanakoCard.waitFor();
 await hanakoCard.locator('a.name').click();
@@ -70,7 +69,7 @@ await taro.screenshot({ path: `${out}/m5-1-profile.png` });
 
 // 「フォロー中」のタイムラインに、はなこの投稿が出る(けんの投稿は出ない)
 await taro.click('nav a.nav-item:has-text("ホーム")');
-await taro.click('a.tab:has-text("フォロー中")');
+await openTab(taro, 'フォロー中');
 await taro.waitForSelector(`article.card:has-text("${stamp} はなこの投稿")`);
 check('フォロー中のタイムラインにフォローした人の投稿', true);
 check('フォローしていない人の投稿は出ない', !(await taro.content()).includes(`${stamp} けんの投稿`));

@@ -9,7 +9,7 @@ X(旧 Twitter)のような、タイムライン型の SNS の Web アプリで�
 ![PostgreSQL 18](https://img.shields.io/badge/PostgreSQL-18-4169E1)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED)
 ![AWS](https://img.shields.io/badge/AWS-EC2_%2F_S3-FF9900)
-![Tests](https://img.shields.io/badge/tests-JUnit_119_%2B_Vitest_19_%2B_E2E_217-brightgreen)
+![Tests](https://img.shields.io/badge/tests-JUnit_121_%2B_Vitest_19_%2B_E2E_217-brightgreen)
 
 ![ホーム画面](docs/images/home.png)
 
@@ -65,7 +65,7 @@ X(旧 Twitter)のような、タイムライン型の SNS の Web アプリで�
 | 層 | 使ったもの |
 |---|---|
 | 画面 | React 19 / Vite 8 / React Router 8 / CSS(ライブラリなし)/ oxlint |
-| サーバー | Java 21 / Spring Boot 4.1(Spring Web MVC・Spring Security・Spring Data JPA・Spring Session JDBC)/ Hibernate 7 |
+| サーバー | Java 21 / Spring Boot 4.1(Spring Web MVC・Spring Security・Spring Data JPA・Spring Session JDBC)/ Hibernate 7 / Flyway(テーブルの変更管理) |
 | データベース | PostgreSQL 18 |
 | リアルタイム | Server-Sent Events(`SseEmitter`) |
 | API 仕様書 | springdoc-openapi 3.1(Swagger UI・OpenAPI 3.1) |
@@ -98,7 +98,8 @@ flowchart LR
 - **セキュリティ**: すべての API で、サーバー側でログイン・本人・管理者かを確かめる。CSRF 対策、BCrypt、Cookie の `HttpOnly`・`Secure`・`SameSite`、Content-Security-Policy、ログインの連続失敗のロック、画像は拡張子ではなく中身で形式を確かめる
 - **見やすさ**: 文字と背景の色の差を十分に取り(本文は WCAG の AAA 相当)、状態を色だけでなく文字や形でも示す。キーボードだけで操作でき、ダイアログを閉じるとキーボードの位置が元に戻る
 - **性能**: 一覧の取得で SQL の回数が件数に比例して増えない(N+1 問題)ことを、テストで SQL の回数を数えて確かめている。カーソル方式で、読み込み中に新着が増えても二重に出ない
-- **テスト**: サーバーの自動テスト 119 件(結合テストと単体テスト)、画面の単体テスト 19 件、実際のブラウザでの操作テスト 10 本・217 項目。プッシュのたびに CI で自動で流れる。公開前の点検として、HTML の埋め込み・長い文字列・二度押し・通信の失敗なども確かめている
+- **テスト**: サーバーの自動テスト 121 件(結合テストと単体テスト)、画面の単体テスト 19 件、実際のブラウザでの操作テスト 10 本・217 項目。プッシュのたびに CI で自動で流れる。公開前の点検として、HTML の埋め込み・長い文字列・二度押し・通信の失敗なども確かめている
+- **テーブルの変更管理**: テーブルは Flyway が番号付きの SQL から作る・変える。起動のときに Hibernate がコードとテーブルを照らし合わせ(validate)、食い違っていれば起動しない。テストは空の DB に SQL を流してから始まるので、SQL とコードのずれはテストで見つかる
 - **ドキュメント**: 要件定義書・機能定義書・画面仕様定義書・受け入れ確認表・API 仕様書をそろえ、実装と食い違ったら文書を直している
 
 ## API 仕様書(Swagger)
@@ -137,7 +138,7 @@ npm run dev
 
 | 何を | どうやって | 内容 |
 |---|---|---|
-| サーバー | `./mvnw test` | JUnit 119 件。**結合テスト**(本物の PostgreSQL を Testcontainers で動かす。Docker が必要。S3 への保存は S3Mock で確かめる)と、DB を使わない**単体テスト**(検索の言葉・LIKE の記号の打ち消し・画像の形式とパス・ハッシュタグ。1 クラス 0.01 秒ほど) |
+| サーバー | `./mvnw test` | JUnit 121 件。**結合テスト**(本物の PostgreSQL を Testcontainers で動かす。Docker が必要。S3 への保存は S3Mock で確かめる)と、DB を使わない**単体テスト**(検索の言葉・LIKE の記号の打ち消し・画像の形式とパス・ハッシュタグ。1 クラス 0.01 秒ほど) |
 | 画面の単体テスト | `cd frontend && npm test` | Vitest 19 件。日時の表示・本文のリンク化・表示モード・お知らせの文 |
 | 画面のコード | `cd frontend && npm run lint` | oxlint |
 | 画面の操作 | `cd e2e && npm install && npm test` | Playwright で実際のブラウザ(Edge)を動かす。10 本・217 項目 |
@@ -171,6 +172,7 @@ AWS では、EC2(t4g.micro)を**使うときだけ起動**し(止めている間
 | フォルダ | 内容 |
 |---|---|
 | `src/main/java/com/example/sns/` | サーバー。機能ごとに分けている(`auth`・`post`・`profile`・`notification`・`search`・`realtime`・`admin` など) |
+| `src/main/resources/db/migration/` | テーブルの定義と変更(Flyway。`V1__〜.sql` から番号の順に流れる) |
 | `src/test/` | サーバーの自動テスト |
 | `frontend/` | 画面(React + Vite)。ビルドすると `src/main/resources/static/` に出力する(git に入れない) |
 | `e2e/` | 画面の操作テスト(Playwright)と見やすさの点検 |

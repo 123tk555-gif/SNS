@@ -1,7 +1,7 @@
 import { chromium } from 'playwright-core';
 
 const base = process.argv[2] ?? 'http://localhost:5173';
-import { out } from '../lib.mjs';
+import { openTab, out } from '../lib.mjs';
 const results = [];
 const errors = [];
 const check = (name, ok, extra = '') => results.push(`${ok ? 'OK ' : 'NG '} ${name}${extra ? ` (${extra})` : ''}`);
@@ -76,8 +76,7 @@ await hanako.waitForSelector(`article.card:has-text("${stamp} 消える投稿")`
 check('削除された投稿が画面から消える', true);
 
 // 4. 「フォロー中」: フォローしていない人の新着は出ず、フォローしたら出る
-await hanako.click('a.tab:has-text("フォロー中")');
-await hanako.waitForSelector('main .empty, main article.card');
+await openTab(hanako, 'フォロー中');
 await hanako.waitForTimeout(500);
 await apiPost(taro, `M6 ${stamp} フォロー前`);
 await hanako.waitForTimeout(1500);
