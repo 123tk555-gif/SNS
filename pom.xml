@@ -18,7 +18,7 @@
 		<!-- AWS SDK for Java(S3)。部品どうしのバージョンを BOM でそろえる -->
 		<aws-sdk.version>2.57.3</aws-sdk.version>
 		<!-- API 仕様書(OpenAPI)の自動生成と Swagger UI。Spring Boot 4 向けの 3 系 -->
-		<springdoc.version>3.1.1</springdoc.version>
+		<springdoc.version>3.2.0</springdoc.version>
 	</properties>
 	<dependencyManagement>
 		<dependencies>
