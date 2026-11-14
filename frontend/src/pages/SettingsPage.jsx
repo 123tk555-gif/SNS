@@ -39,7 +39,9 @@ export default function SettingsPage() {
     <Layout title="設定">
       <section className="settings-section" aria-labelledby="settings-profile">
         <h2 id="settings-profile">プロフィール</h2>
-        {profile ? (
+        {user.guest ? (
+          <p>お試しのアカウントは、みんなで使うため、プロフィールを変えられません。自分のアカウントを作ると、表示名・自己紹介・アイコンを変えられます</p>
+        ) : profile ? (
           <ProfileForm profile={profile} onSaved={setProfile} />
         ) : error ? (
           <div>
@@ -66,7 +68,7 @@ export default function SettingsPage() {
       </section>
       <section className="settings-section" aria-labelledby="settings-account">
         <h2 id="settings-account">アカウント</h2>
-        <p>メールアドレス: {user.email}</p>
+        <p>{user.guest ? 'お試しのアカウントでログインしています' : `メールアドレス: ${user.email}`}</p>
         <button className="btn btn-outline" type="button" onClick={logout}>
           ログアウト
         </button>

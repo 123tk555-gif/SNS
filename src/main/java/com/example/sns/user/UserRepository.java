@@ -16,6 +16,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByGoogleSub(String googleSub);
 
+    /** お試しログインのアカウント(1 つだけ作る) */
+    Optional<User> findFirstByGuestTrueOrderByIdAsc();
+
     /** handleLower は小文字にしたユーザーID(User.normalizeHandle) */
     boolean existsByHandleLower(String handleLower);
 

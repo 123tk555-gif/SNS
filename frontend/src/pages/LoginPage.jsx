@@ -16,7 +16,7 @@ const URL_ERRORS = {
 
 /** S-01 ログイン(F-AUTH-02, 03, 06, 07) */
 export default function LoginPage() {
-  const { googleEnabled, setUser } = useAuth()
+  const { googleEnabled, guestEnabled, setUser } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -50,6 +50,20 @@ export default function LoginPage() {
     }
   }
 
+  // お試しログイン(F-AUTH-08): 登録せずに、みんなで使うお試し用のアカウントで入る
+  async function tryAsGuest() {
+    setSubmitting(true)
+    try {
+      const user = await api('/api/auth/guest', { method: 'POST' })
+      setUser(user)
+      navigate('/', { replace: true })
+    } catch (e) {
+      setError(e.message)
+      setSubmitting(false)
+      errorRef.current?.focus()
+    }
+  }
+
   async function resend() {
     try {
       await api('/api/auth/verify-email/resend', { method: 'POST', body: { email } })
@@ -61,6 +75,15 @@ export default function LoginPage() {
 
   return (
     <AuthLayout title="ログイン" notice={location.state?.notice}>
+      {guestEnabled && (
+        <div className="guest-try">
+          <button className="btn btn-primary btn-block" type="button" onClick={tryAsGuest} disabled={submitting}>
+            登録せずに試す
+          </button>
+          <p className="hint">お試し用のアカウントで、すぐに使えます。書き込みは毎日 4 時に消えます</p>
+          <div className="divider">または</div>
+        </div>
+      )}
       {googleEnabled && (
         <>
           <a className="btn btn-outline btn-block" href="/oauth2/authorization/google">

@@ -68,7 +68,7 @@ public class SecurityConfig {
                         // SSE(/api/stream)が終わるときなどの内部の処理の続き。最初のリクエストで確かめ済み
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.POST,
-                                "/api/auth/signup", "/api/auth/login", "/api/auth/logout",
+                                "/api/auth/signup", "/api/auth/login", "/api/auth/guest", "/api/auth/logout",
                                 "/api/auth/verify-email", "/api/auth/verify-email/resend",
                                 "/api/auth/password-reset", "/api/auth/password-reset/confirm")
                         .permitAll()

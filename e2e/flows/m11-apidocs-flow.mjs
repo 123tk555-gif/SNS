@@ -32,7 +32,7 @@ check('タグの並びが仕様どおり(アカウントが最初、管理者が
 for (const tag of await page.locator('.opblock-tag').all()) await tag.click();
 await page.waitForTimeout(300);
 const ops = await page.locator('.opblock').count();
-check('API が 53 個並ぶ', ops === 53, `${ops}個`);
+check('API が 54 個並ぶ(お試しログインを含む)', ops === 54, `${ops}個`);
 check('各 API に日本語の見出しがある', (await page.locator('.opblock-summary-description').allInnerTexts()).every((t) => /[぀-ヿ一-鿿]/.test(t)));
 await page.screenshot({ path: `${out}/m11-1-swagger.png` });
 

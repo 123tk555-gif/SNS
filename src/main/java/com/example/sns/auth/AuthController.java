@@ -40,7 +40,9 @@ class AuthController {
     @Schema(description = "画面の設定")
     record ConfigResponse(
             @Schema(description = "Google ログインが使えるか。`false` のときは、画面に「Google でログイン」を出さない", example = "true")
-            boolean googleEnabled) {
+            boolean googleEnabled,
+            @Schema(description = "お試しログイン(`POST /api/auth/guest`)が使えるか。`false` のときは、画面に「登録せずに試す」を出さない", example = "true")
+            boolean guestEnabled) {
     }
 
     @Schema(description = "ユーザーIDが使えるかの結果")
@@ -55,25 +57,27 @@ class AuthController {
     private final SessionLogin sessionLogin;
     private final GoogleSettings google;
     private final NotificationService notifications;
+    private final GuestService guests;
 
     AuthController(AuthService auth, UserRepository users, SessionLogin sessionLogin, GoogleSettings google,
-            NotificationService notifications) {
+            NotificationService notifications, GuestService guests) {
         this.auth = auth;
         this.users = users;
         this.sessionLogin = sessionLogin;
         this.google = google;
         this.notifications = notifications;
+        this.guests = guests;
     }
 
     /** 画面が最初に呼ぶ。Google ログインのボタンを出すかを返す(ついでに CSRF 対策の Cookie も受け取る) */
     @GetMapping("/api/auth/config")
     @SecurityRequirements
     @Operation(summary = "画面の設定の取得",
-            description = "Google ログインが使えるかを返す。ログイン不要。画面は最初にこれを呼ぶ。"
+            description = "Google ログインとお試しログインが使えるかを返す。ログイン不要。画面は最初にこれを呼ぶ。"
                     + "このとき、CSRF 対策の Cookie `XSRF-TOKEN` も受け取れる(データを変える API を呼ぶときに、この値をヘッダー `X-XSRF-TOKEN` に入れて送る)")
     @ApiResponse(responseCode = "200", description = "画面の設定(Google ログインが使えるか)")
     ConfigResponse config() {
-        return new ConfigResponse(google.enabled());
+        return new ConfigResponse(google.enabled(), guests.enabled());
     }
 
     @PostMapping("/api/auth/signup")
@@ -132,6 +136,22 @@ class AuthController {
             HttpServletResponse httpResponse) {
         User user = auth.login(request.email(), request.password());
         sessionLogin.login(user, httpRequest, httpResponse);
+        return me(user);
+    }
+
+    @PostMapping("/api/auth/guest")
+    @SecurityRequirements
+    @Operation(summary = "お試しログイン",
+            description = "登録せずに、お試し用のアカウント(みんなで使う 1 つのアカウント)でログインし、Cookie `SESSION` を返す。"
+                    + "アカウントがなければ作る。お試し用のアカウントは、プロフィールを変えられず、管理者の機能も使えない。"
+                    + "書き込み(投稿・いいね・フォローなど)は、毎日 4 時(日本時間)に消える")
+    @ApiResponse(responseCode = "200", description = "ログインした。ユーザーの情報を返す(`guest` が `true`)")
+    @ApiResponse(responseCode = "404", description = "お試しログインを止めている(設定 `GUEST_LOGIN_ENABLED=false`)")
+    MeResponse guest(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        User user = guests.guest();
+        sessionLogin.login(user, httpRequest, httpResponse);
+        Events.info(log, "auth.login", "ログインしました").addKeyValue("accountId", user.getId())
+                .addKeyValue("method", "guest").log();
         return me(user);
     }
 

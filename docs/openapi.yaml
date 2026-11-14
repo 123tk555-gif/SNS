@@ -248,8 +248,8 @@ paths:
       tags:
       - アカウント
       summary: 画面の設定の取得
-      description: Google ログインが使えるかを返す。ログイン不要。画面は最初にこれを呼ぶ。このとき、CSRF 対策の Cookie `XSRF-TOKEN`
-        も受け取れる(データを変える API を呼ぶときに、この値をヘッダー `X-XSRF-TOKEN` に入れて送る)
+      description: Google ログインとお試しログインが使えるかを返す。ログイン不要。画面は最初にこれを呼ぶ。このとき、CSRF 対策の Cookie
+        `XSRF-TOKEN` も受け取れる(データを変える API を呼ぶときに、この値をヘッダー `X-XSRF-TOKEN` に入れて送る)
       operationId: config
       responses:
         "200":
@@ -258,6 +258,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ConfigResponse"
+      security: []
+  /api/auth/guest:
+    post:
+      tags:
+      - アカウント
+      summary: お試しログイン
+      description: 登録せずに、お試し用のアカウント(みんなで使う 1 つのアカウント)でログインし、Cookie `SESSION` を返す。アカウントがなければ作る。お試し用のアカウントは、プロフィールを変えられず、管理者の機能も使えない。書き込み(投稿・いいね・フォローなど)は、毎日
+        4 時(日本時間)に消える
+      operationId: guest
+      responses:
+        "200":
+          description: ログインした。ユーザーの情報を返す(`guest` が `true`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+        "404":
+          description: お試しログインを止めている(設定 `GUEST_LOGIN_ENABLED=false`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
       security: []
   /api/auth/login:
     post:
@@ -2219,6 +2241,10 @@ components:
           type: boolean
           description: Google ログインが使えるか。`false` のときは、画面に「Google でログイン」を出さない
           example: true
+        guestEnabled:
+          type: boolean
+          description: お試しログイン(`POST /api/auth/guest`)が使えるか。`false` のときは、画面に「登録せずに試す」を出さない
+          example: true
     EditRequest:
       type: object
       description: 投稿の編集に送る内容
@@ -2350,6 +2376,10 @@ components:
           format: int64
           description: 未読の通知の数
           example: 3
+        guest:
+          type: boolean
+          description: お試しログインのアカウントか(`true` なら、プロフィールを変えられず、書き込みは毎日消える)
+          example: false
     NewPassword:
       type: object
       description: 新しいパスワードを送る内容

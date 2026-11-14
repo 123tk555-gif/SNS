@@ -7,7 +7,7 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   // loggedOut: この画面でログアウトした直後か(ログイン画面に「ログアウトしました」を出すため)
-  const [state, setState] = useState({ status: 'loading', user: null, googleEnabled: false, error: null, loggedOut: false })
+  const [state, setState] = useState({ status: 'loading', user: null, googleEnabled: false, guestEnabled: false, error: null, loggedOut: false })
 
   const refresh = useCallback(async () => {
     try {
@@ -28,7 +28,7 @@ export function AuthProvider({ children }) {
     setState((s) => ({ ...s, status: 'loading' }))
     try {
       const config = await api('/api/auth/config')
-      setState((s) => ({ ...s, googleEnabled: config.googleEnabled }))
+      setState((s) => ({ ...s, googleEnabled: config.googleEnabled, guestEnabled: config.guestEnabled }))
     } catch (e) {
       setState((s) => ({ ...s, status: 'error', error: e.message }))
       return

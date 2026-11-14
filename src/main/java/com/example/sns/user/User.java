@@ -64,6 +64,10 @@ public class User {
     @Column(nullable = false)
     private boolean suspended;
 
+    /** お試しログインのアカウント(みんなで使う。プロフィールは変えられず、書き込みは毎日消える) */
+    @Column(nullable = false)
+    private boolean guest;
+
     @Column(nullable = false)
     private int failedLoginCount;
 
@@ -98,6 +102,20 @@ public class User {
         user.googleSub = googleSub;
         user.emailVerified = true;
         return user;
+    }
+
+    /** お試しログインのアカウント(確認済み・初期設定済み。パスワードも Google もないので、ふつうのログインはできない) */
+    public static User guest(String email, String handle, String displayName, String bio) {
+        User user = new User(email);
+        user.emailVerified = true;
+        user.completeOnboarding(handle, displayName);
+        user.bio = bio;
+        user.guest = true;
+        return user;
+    }
+
+    public boolean isGuest() {
+        return guest;
     }
 
     public static String normalizeEmail(String email) {

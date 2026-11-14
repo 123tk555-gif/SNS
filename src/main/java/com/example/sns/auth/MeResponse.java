@@ -15,11 +15,13 @@ public record MeResponse(
         String avatarUrl,
         @Schema(description = "権限。`USER`(一般)か `ADMIN`(管理者)", example = "USER") Role role,
         @Schema(description = "初期設定(ユーザーIDと表示名の決定)が済んでいるか", example = "true") boolean onboarded,
-        @Schema(description = "未読の通知の数", example = "3") long unreadNotificationCount) {
+        @Schema(description = "未読の通知の数", example = "3") long unreadNotificationCount,
+        @Schema(description = "お試しログインのアカウントか(`true` なら、プロフィールを変えられず、書き込みは毎日消える)", example = "false")
+        boolean guest) {
 
     static MeResponse from(User user, long unreadNotificationCount) {
         String avatarUrl = user.getAvatarPath() == null ? null : "/media/" + user.getAvatarPath();
         return new MeResponse(user.getId(), user.getEmail(), user.getHandle(), user.getDisplayName(), avatarUrl,
-                user.getRole(), user.isOnboarded(), unreadNotificationCount);
+                user.getRole(), user.isOnboarded(), unreadNotificationCount, user.isGuest());
     }
 }

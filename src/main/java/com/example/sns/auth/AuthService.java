@@ -43,7 +43,7 @@ public class AuthService {
     private static final Pattern HANDLE = Pattern.compile("[A-Za-z0-9_]{3,15}");
     /** 管理者や運営と見分けがつかなくなるため、ユーザーIDに使えない語 */
     private static final Set<String> RESERVED_HANDLES =
-            Set.of("admin", "administrator", "root", "system", "support", "official");
+            Set.of("admin", "administrator", "root", "system", "support", "official", "guest");
     /** BCrypt が扱えるのは 72 バイトまで */
     private static final int MAX_PASSWORD_BYTES = 72;
 

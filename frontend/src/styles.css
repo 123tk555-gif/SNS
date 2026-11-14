@@ -238,6 +238,17 @@ h1, h2, h3 { line-height: 1.3; }
 .panel > a { display: inline-block; padding: 4px 0; }
 .panel p { margin: 0 0 10px; font-size: 15px; color: var(--muted); }
 
+/* ---- お試しログイン ---- */
+.guest-try .hint { margin: 6px 0 0; font-size: 15px; color: var(--muted); }
+.guest-banner {
+  margin: 0;
+  padding: 8px 16px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  font-weight: 700;
+}
+
 /* ---- 画面の見出しのバー ---- */
 .topbar {
   position: sticky;

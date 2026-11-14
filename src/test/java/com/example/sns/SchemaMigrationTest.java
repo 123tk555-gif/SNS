@@ -33,7 +33,7 @@ class SchemaMigrationTest extends ApiTestSupport {
     }
 
     @Test
-    void Flywayを入れる前からテーブルがあるDBは_V1を流さず済みとして扱う() {
+    void Flywayを入れる前からテーブルがあるDBは_V1を流さず済みとして扱い_V2から先は流す() {
         // 本番・開発用の DB と同じ状況を、別のスキーマで作る(アプリと同じ Flyway の設定を使う)
         jdbc.execute("drop schema if exists legacy cascade");
         jdbc.execute("create schema legacy");
@@ -47,11 +47,14 @@ class SchemaMigrationTest extends ApiTestSupport {
             legacy.migrate();
 
             List<Map<String, Object>> history = jdbc.queryForList(
-                    "select version, type from legacy.flyway_schema_history where version is not null");
-            assertThat(history).singleElement().satisfies(row -> {
+                    "select version, type from legacy.flyway_schema_history where version is not null order by installed_rank");
+            // V1 は「済み」の印だけ。V2 から先は、ふつうに流れる(本番に反映したときと同じ)
+            assertThat(history).first().satisfies(row -> {
                 assertThat(row.get("version")).isEqualTo("1");
                 assertThat(row.get("type")).isEqualTo("BASELINE");
             });
+            assertThat(history.subList(1, history.size())).allSatisfy(row -> assertThat(row.get("type")).isEqualTo("SQL"));
+            assertThat(history).extracting(row -> row.get("version")).contains("2");
             // V1 は流れていない(流れていれば posts などのテーブルができている)
             Integer posts = jdbc.queryForObject(
                     "select count(*) from information_schema.tables where table_schema = 'legacy' and table_name = 'posts'",

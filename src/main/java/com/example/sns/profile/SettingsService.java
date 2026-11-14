@@ -1,5 +1,6 @@
 package com.example.sns.profile;
 
+import com.example.sns.auth.GuestService;
 import com.example.sns.media.ImageStorage;
 import com.example.sns.user.User;
 import com.example.sns.user.UserRepository;
@@ -82,9 +83,14 @@ public class SettingsService {
         return user;
     }
 
+    /** 変える人を探す。お試しのアカウントは、みんなで使うので、プロフィールを変えられない(403) */
     private User find(long userId) {
-        return users.findById(userId)
+        User user = users.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "ログインしてください"));
+        if (user.isGuest()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, GuestService.CANNOT_EDIT);
+        }
+        return user;
     }
 
     private static int length(String text) {

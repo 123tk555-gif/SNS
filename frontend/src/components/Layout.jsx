@@ -83,6 +83,9 @@ export default function Layout({ title, sub, actions, back = false, focusHeading
           </button>
         </nav>
         <main id="main" className="main">
+          {user?.guest && (
+            <p className="guest-banner">お試し中です。投稿などの書き込みは、毎日 4 時に消えます</p>
+          )}
           <div className="topbar">
             {back && (
               <button className="icon-btn plain" type="button" aria-label="前の画面に戻る"
