@@ -2,7 +2,7 @@
   "name": "sns-e2e",
   "private": true,
   "version": "1.0.0",
-  "description": "SNSタイムラインアプリの画面の操作テスト(Playwright)",
+  "description": "Leafline(SNS タイムラインアプリ)の画面の操作テスト(Playwright)",
   "type": "module",
   "scripts": {
     "test": "node run-all.mjs",

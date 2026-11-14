@@ -29,8 +29,8 @@ class AuthMailer {
     }
 
     void sendVerification(User user, String token) {
-        send(user, "【SNS】メールアドレスの確認", """
-                SNSタイムラインアプリへのご登録ありがとうございます。
+        send(user, "【Leafline】メールアドレスの確認", """
+                Leafline へのご登録ありがとうございます。
 
                 次のリンクを開いて、登録を完了してください(リンクの有効期限は24時間です)。
                 %s/verify-email?token=%s
@@ -40,7 +40,7 @@ class AuthMailer {
     }
 
     void sendPasswordReset(User user, String token) {
-        send(user, "【SNS】パスワードの再設定", """
+        send(user, "【Leafline】パスワードの再設定", """
                 パスワードの再設定を受け付けました。
 
                 次のリンクを開いて、新しいパスワードを設定してください(リンクの有効期限は1時間です)。

@@ -5,6 +5,7 @@ import { useAuth } from '../auth.jsx'
 import { useRealtime } from '../realtime.jsx'
 import Composer from './Composer.jsx'
 import Icon from './Icon.jsx'
+import Logo from './Logo.jsx'
 import Modal from './Modal.jsx'
 import TrendList from './TrendList.jsx'
 
@@ -24,7 +25,7 @@ export default function Layout({ title, sub, actions, back = false, focusHeading
   const previousUnread = useRef(unreadCount)
 
   useEffect(() => {
-    document.title = `${title} / SNS`
+    document.title = `${title} / Leafline`
     if (focusHeading) heading.current?.focus()
   }, [title, focusHeading])
 
@@ -57,9 +58,9 @@ export default function Layout({ title, sub, actions, back = false, focusHeading
         <nav className="side" aria-label="メインメニュー">
           <NavLink className="brand hide-sm" to="/">
             <span className="brand-mark">
-              <Icon name="at" size={22} />
+              <Logo size={28} />
             </span>
-            <span className="brand-label">SNS</span>
+            <span className="brand-label">Leafline</span>
           </NavLink>
           {items.map((item) => (
             <NavLink key={item.to} to={item.to} end={item.end} className={`nav-item${item.hideSm ? ' hide-sm' : ''}`}>

@@ -12,7 +12,7 @@
 	<artifactId>sns</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>sns</name>
-	<description>SNSタイムラインアプリ</description>
+	<description>Leafline(SNS タイムラインアプリ)</description>
 	<properties>
 		<java.version>21</java.version>
 		<!-- AWS SDK for Java(S3)。部品どうしのバージョンを BOM でそろえる -->

@@ -1,18 +1,22 @@
-/* SNSタイムラインアプリ(prototype/style.css から作った)
+/* Leafline(SNS タイムラインアプリ)の画面(prototype/style.css から作った)
    画面仕様定義書の「3.7 見やすさの共通ルール」に合わせ、文字は 18px を標準にする */
 
 :root {
   --bg: #ffffff;
-  --surface: #f3f5f8;
-  --text: #111827;
-  --muted: #444c58;
-  --border: #cbd2db;
+  /* ライトグリーンを基調にする: ページの背景・見出しの帯・メニューの今いる項目(投稿のカードと中央の列は白のまま) */
+  --page: #dcefe0;
+  --topbar: #c4e4cb;
+  --nav-active: #bfe0c6;
+  --surface: #e4f2e7;
+  --text: #13201a;
+  --muted: #3d4b43;
+  --border: #c3dcc8;
   /* 入力欄・ボタンなど、操作する部品の枠線(背景との差 3 以上) */
-  --control-border: #6b7280;
-  --accent: #1a45c2;
-  --accent-hover: #1e40af;
+  --control-border: #5f7366;
+  --accent: #145c33;
+  --accent-hover: #0f4a28;
   --on-accent: #ffffff;
-  --accent-soft: #e6edfd;
+  --accent-soft: #d3ebd8;
   --like: #a30f36;
   --danger: #a81818;
   --on-danger: #ffffff;
@@ -22,16 +26,19 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0e1217;
-    --surface: #1a2029;
-    --text: #f1f3f6;
-    --muted: #aeb7c2;
-    --border: #3a4554;
-    --control-border: #7f8a9b;
-    --accent: #8ab4ff;
-    --accent-hover: #a9c7ff;
-    --on-accent: #0e1217;
-    --accent-soft: #1c2b45;
+    --bg: #111a15;
+    --page: #0e1a13;
+    --topbar: #1a3726;
+    --nav-active: #22452f;
+    --surface: #18241d;
+    --text: #eef3ef;
+    --muted: #aec0b4;
+    --border: #2f4537;
+    --control-border: #7c9585;
+    --accent: #86d9a0;
+    --accent-hover: #a6e6b9;
+    --on-accent: #0b130e;
+    --accent-soft: #1a3324;
     --like: #ff8fa8;
     --danger: #ff9b9b;
     --on-danger: #0e1217;
@@ -41,16 +48,19 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #0e1217;
-  --surface: #1a2029;
-  --text: #f1f3f6;
-  --muted: #aeb7c2;
-  --border: #3a4554;
-  --control-border: #7f8a9b;
-  --accent: #8ab4ff;
-  --accent-hover: #a9c7ff;
-  --on-accent: #0e1217;
-  --accent-soft: #1c2b45;
+  --bg: #111a15;
+  --page: #0e1a13;
+  --topbar: #1a3726;
+  --nav-active: #22452f;
+  --surface: #18241d;
+  --text: #eef3ef;
+  --muted: #aec0b4;
+  --border: #2f4537;
+  --control-border: #7c9585;
+  --accent: #86d9a0;
+  --accent-hover: #a6e6b9;
+  --on-accent: #0b130e;
+  --accent-soft: #1a3324;
   --like: #ff8fa8;
   --danger: #ff9b9b;
   --on-danger: #0e1217;
@@ -70,7 +80,7 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--page);
   color: var(--text);
   font-family: "SNS Underscore", "BIZ UDPGothic", "BIZ UDPゴシック", "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif;
   font-size: 18px;
@@ -170,8 +180,10 @@ h1, h2, h3 { line-height: 1.3; }
   text-decoration: none;
   font-size: 20px;
 }
-.nav-item:hover { background: var(--surface); color: var(--text); }
+.nav-item:hover { background: var(--accent-soft); color: var(--text); }
+/* 今いる画面: 緑の帯で塗る。色だけに頼らないよう、太字と左の線も付ける */
 .nav-item[aria-current="page"] {
+  background: var(--nav-active);
   font-weight: 700;
   box-shadow: inset 4px 0 0 var(--accent);
   border-radius: 0 999px 999px 0;
@@ -200,6 +212,8 @@ h1, h2, h3 { line-height: 1.3; }
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
   padding-bottom: 96px;
+  /* 投稿などが並ぶ中央の列は白(ページの背景の緑から浮かせる) */
+  background: var(--bg);
 }
 
 .right {
@@ -215,7 +229,8 @@ h1, h2, h3 { line-height: 1.3; }
 }
 
 .panel {
-  background: var(--surface);
+  background: var(--bg);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 14px 16px;
 }
@@ -228,7 +243,7 @@ h1, h2, h3 { line-height: 1.3; }
   position: sticky;
   top: 0;
   z-index: 5;
-  background: var(--bg);
+  background: var(--topbar);
   border-bottom: 1px solid var(--border);
   padding: 10px 16px;
   min-height: 60px;
@@ -740,7 +755,7 @@ h1[tabindex="-1"]:focus { outline: none; }
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
-  background: var(--surface);
+  background: var(--page);
 }
 .auth-card {
   width: 100%;
@@ -848,7 +863,7 @@ dialog .composer { padding: 0; border: 0; }
     flex-direction: row;
     justify-content: space-around;
     padding: 4px;
-    background: var(--bg);
+    background: var(--topbar);
     border-top: 1px solid var(--border);
   }
   .hide-sm { display: none !important; }

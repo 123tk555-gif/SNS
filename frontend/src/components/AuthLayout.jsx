@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react'
+import Logo from './Logo.jsx'
 
 /** ログイン・登録などのカード型の画面。画面が変わったら見出しにキーボードの位置を移し、タブの題名を変える */
 export default function AuthLayout({ title, notice, children }) {
   const heading = useRef(null)
 
   useEffect(() => {
-    document.title = `${title} / SNS`
+    document.title = `${title} / Leafline`
     heading.current?.focus()
   }, [title])
 
@@ -13,8 +14,10 @@ export default function AuthLayout({ title, notice, children }) {
     <main id="main" className="auth">
       <div className="auth-card">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">@</span>
-          SNS
+          <span className="brand-mark">
+            <Logo size={28} />
+          </span>
+          Leafline
         </div>
         <h1 tabIndex={-1} ref={heading}>
           {title}

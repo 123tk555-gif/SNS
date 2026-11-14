@@ -35,7 +35,7 @@ class OpenApiConfig {
 
 
     private static final String DESCRIPTION = """
-            SNS タイムラインアプリの API 仕様書です。詳しい仕様(処理の流れ・データの定義・権限)は
+            Leafline(SNS タイムラインアプリ)の API 仕様書です。詳しい仕様(処理の流れ・データの定義・権限)は
             [機能定義書](https://github.com/123tk555-gif/SNS/blob/main/docs/機能定義書.md)にあります。
 
             ## 試し方(「Try it out」)
@@ -55,7 +55,7 @@ class OpenApiConfig {
     OpenAPI openApi() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("SNS タイムラインアプリ API 仕様書")
+                        .title("Leafline API 仕様書")
                         .version("1.0")
                         .description(DESCRIPTION))
                 // 画面を開いたアドレスと同じ場所を指す(手元でも、公開したサーバーでも、そのまま動く)
