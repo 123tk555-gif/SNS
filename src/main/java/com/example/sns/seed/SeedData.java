@@ -4,6 +4,8 @@ import com.example.sns.hashtag.HashtagService;
 import com.example.sns.user.Role;
 import com.example.sns.user.User;
 import com.example.sns.user.UserRepository;
+import java.util.Arrays;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -15,8 +17,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 動作確認用のテストデータ。プロファイル seed で起動したときだけ、データを空にしてから入れ直す。
- * 起動: mvnw spring-boot:run "-Dspring-boot.run.profiles=seed"(今までのデータは消える)
+ * 動作確認用のテストデータ。プロファイル seed で起動したときだけ、入れ直す。
+ * 起動: mvnw spring-boot:run "-Dspring-boot.run.profiles=seed"
+ * 消えるもの: すべての投稿・いいね・フォローなどと、テストデータの 5 人・E2E のテスト用ユーザー(e2e_)。
+ * 残るもの: それ以外のユーザー(Google でログインして作った、ふだん使いのアカウントなど)。
  * パスワードはすべて password123。taro_dev は管理者。
  */
 @Component
@@ -77,9 +81,13 @@ class SeedData implements ApplicationRunner {
         jdbc.update("delete from post_hashtags");
         jdbc.update("delete from post_images");
         jdbc.update("delete from posts");
-        jdbc.update("delete from email_tokens");
-        jdbc.update("delete from users");
-        jdbc.update("delete from spring_session");
+        // ユーザーは、テストデータの 5 人と、E2E のテスト用(ユーザーID が e2e_ で始まる)だけを消して入れ直す。
+        // Google でログインして作ったアカウントなど、ふだん使いのアカウントは消さない(ログインも切らない)
+        String seedUsers = "select id from users where email in (" + "?,".repeat(USERS.length - 1) + "?)"
+                + " or handle like 'e2e\\_%'";
+        Object[] seedEmails = Arrays.stream(USERS).map(SeedUser::email).toArray();
+        jdbc.update("delete from email_tokens where user_id in (" + seedUsers + ")", seedEmails);
+        jdbc.update("delete from users where id in (" + seedUsers + ")", seedEmails);
         String hash = passwordEncoder.encode(PASSWORD);
         long[] userIds = new long[USERS.length];
         for (int i = 0; i < USERS.length; i++) {
@@ -116,8 +124,8 @@ class SeedData implements ApplicationRunner {
         jdbc.update("""
                 insert into likes (user_id, post_id, created_at)
                 select u.id, p.id, now() from users u cross join posts p
-                where p.reply_to_id is null and (p.id + u.id) % 3 = 0
-                """);
+                where p.reply_to_id is null and (p.id + u.id) %% 3 = 0 and u.id in (%s)
+                """.formatted(ids(userIds)));
         jdbc.update("""
                 insert into bookmarks (user_id, post_id, created_at)
                 select u.id, p.id, now() from users u
@@ -138,5 +146,9 @@ class SeedData implements ApplicationRunner {
                 """);
         log.info("テストデータを入れました(ユーザー {} 人・投稿 {} 件・返信・いいね・ブックマーク・フォロー。パスワードはすべて {})",
                 USERS.length, total, PASSWORD);
+    }
+
+    private static String ids(long[] ids) {
+        return Arrays.stream(ids).mapToObj(Long::toString).collect(Collectors.joining(","));
     }
 }

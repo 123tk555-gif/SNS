@@ -132,7 +132,7 @@ npm run dev
 ```
 
 - テストデータのユーザー: `taro@example.com`(管理者)・`hanako@example.com` など 5 人。パスワードはすべて `password123`
-- `seed` 付きで起動すると、**今までのデータは消えて**入れ直されます。2 回目からは `./mvnw spring-boot:run` で起動します
+- `seed` 付きで起動すると、**投稿・いいね・フォローなどはすべて消えて**、テストデータが入れ直されます。ユーザーは、テストデータの 5 人だけを入れ直し、Google でログインして作ったアカウントなどは残します。2 回目からは `./mvnw spring-boot:run` で起動します
 - 確認メールは Mailpit(<http://localhost:8025>)で読めます
 - Google ログインを使うときは、`.env.example` をコピーして `.env` を作り、`GOOGLE_CLIENT_ID` と `GOOGLE_CLIENT_SECRET` を書きます(書かなくても、Google のボタンが出ないだけで他は使えます)。`.env` は git に入れません
 
